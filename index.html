@@ -77,10 +77,10 @@
     </style>
 </head>
 <body>
-<h1>ASL Alphabet Detector</h1>
+    <h1>Hand Gesture Detector</h1>
     <p class="subtitle">
-        Real-time ASL (American Sign Language) alphabet detection. Hold each letter sign steady for recognition.
-        Supported letters: A, B, C, D, E, F, G, H, I, K, L, M, N, O, P, Q, R, S, T, U, V, W, X, Y, Z
+        Real-time hand gesture recognition using MediaPipe. This detects common hand poses,
+        not full sign language. Try a thumbs up, open palm, peace sign, or I love you hand shape.
     </p>
     <div class="video-container">
         <video id="webcam" autoplay playsinline muted></video>
@@ -89,10 +89,9 @@
     <button id="start-btn" type="button">Start Camera</button>
     <div id="output">Click Start Camera to begin.</div>
     <div id="supported-gestures">
-        ASL Alphabet: A (fist), B (palm), C (cup), D (index touch thumb), E (fingers curl), F (thumb-index pinch), G (point), H (two fingers), I (pinky), K (two up), L (L-shape), M (thumb under 3), N (thumb under 2), O (circle), P/Q (point down), R (cross), S/T (closed), U (two up), V (peace), W (three up), X (hook), Y (thumb-pinky), Z (claw)
+        Supported gestures: Closed Fist, Open Palm, Pointing Up, Thumb Down, Thumb Up, Victory, ILove You
     </div>
 
-    <script src="https://cdn.jsdelivr.net/npm/fingerpose@0.1.0/dist/fingerpose.min.js"></script>
-    <script type="module" src="app.js"></script>
+    <script src="app.js" type="module"></script>
 </body>
 </html>
