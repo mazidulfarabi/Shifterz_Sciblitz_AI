@@ -281,13 +281,28 @@
                     Roboflow API Key
                     <input id="api-key" type="password" autocomplete="off" placeholder="Paste your Roboflow API key" />
                 </label>
+                <label for="inference-mode">
+                    Inference Mode
+                    <select id="inference-mode">
+                        <option value="model">Trained Model</option>
+                        <option value="sam3">SAM3 Prompt Segmentation</option>
+                    </select>
+                </label>
+                <label for="model-id">
+                    Model ID or Workflow ID
+                    <input id="model-id" type="text" autocomplete="off" placeholder="workspace/model-slug/1 or project/version" />
+                </label>
+                <label for="sam3-prompts">
+                    SAM3 Prompts
+                    <input id="sam3-prompts" type="text" autocomplete="off" placeholder="hand, finger, thumb, palm" />
+                </label>
                 <div class="button-row">
                     <button id="save-key-btn" type="button">Save Key</button>
                     <button id="start-btn" type="button">Start Camera</button>
                     <button id="clear-btn" type="button">Clear Text</button>
                 </div>
                 <div id="output" class="status">Add your Roboflow API key, save it, then start the camera.</div>
-                <div id="api-hint" class="helper">Model: asl-m42ip-ac86g/1. This app sends mirrored frames to Roboflow for inference and builds words from the detected letters.</div>
+                <div id="api-hint" class="helper">Use a trained model ID for letter recognition, or switch to SAM3 and enter text prompts like hand and finger.</div>
             </div>
         </div>
 
