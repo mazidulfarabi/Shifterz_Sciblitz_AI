@@ -79,9 +79,9 @@ const GESTURE_NAMES_BN = {
     Closed_Fist: "মুষ্ঠি",
     Open_Palm: "খোলা হাত",
     Pointing_Up: "উপরের দিকে আঙুল",
-    Thumb_Down: "থাম্বস ডাউন",
-    Thumb_Up: "থাম্বস আপ",
-    Victory: "ভি (বিজয়) ইশারা",
+    Thumb_Down: "অসম্মতি",
+    Thumb_Up: "সম্মতি",
+    Victory: "বিজয়ের চিহ্ন",
     ILoveYou: "আই লাভ ইউ ইশারা"
 };
 
@@ -141,11 +141,14 @@ let runtimeConfig = {
 
 function refreshBnVoice() {
     const voices = window.speechSynthesis?.getVoices() || [];
-    bnVoice =
-        voices.find((voice) => voice.lang === "bn-BD") ||
-        voices.find((voice) => voice.lang === "bn-IN") ||
-        voices.find((voice) => voice.lang.startsWith("bn")) ||
+    const preferredCodes = ["bn-BD", "bn-IN", "bn"];
+    const preferredVoice = voices.find((voice) => preferredCodes.includes(voice.lang)) ||
+        voices.find((voice) => voice.lang?.startsWith("bn")) ||
+        voices.find((voice) => voice.lang?.startsWith("en")) ||
+        voices[0] ||
         null;
+
+    bnVoice = preferredVoice || null;
 }
 
 function markSpeechActivated() {
@@ -272,7 +275,10 @@ function speakWithBrowser(text) {
             utterance.voice = bnVoice;
         }
 
-        const timeoutId = window.setTimeout(() => resolve(false), 4000);
+        const timeoutId = window.setTimeout(() => resolve(false), 5000);
+        utterance.onstart = () => {
+            window.clearTimeout(timeoutId);
+        };
         utterance.onend = () => {
             window.clearTimeout(timeoutId);
             resolve(true);
@@ -285,42 +291,62 @@ function speakWithBrowser(text) {
     });
 }
 
+function getGoogleTtsUrls(text) {
+    const encoded = encodeURIComponent(text);
+    return [
+        `https://translate.google.com/translate_tts?ie=UTF-8&client=tw-ob&tl=${GOOGLE_TTS_LANG}&q=${encoded}`,
+        `https://translate.googleapis.com/translate_tts?ie=UTF-8&client=gtx&tl=${GOOGLE_TTS_LANG}&q=${encoded}`
+    ];
+}
+
 function playGoogleTtsChunk(text) {
-    const url = `https://translate.googleapis.com/translate_tts?ie=UTF-8&client=gtx&tl=${GOOGLE_TTS_LANG}&q=${encodeURIComponent(text)}`;
-
     return new Promise((resolve, reject) => {
-        const audio = new Audio(url);
-        audio.preload = "auto";
-        audio.playbackRate = runtimeConfig.speechRate;
-        currentAudio = audio;
+        const urls = getGoogleTtsUrls(text);
+        let attemptIndex = 0;
 
-        const cleanup = () => {
-            if (currentAudio === audio) {
-                currentAudio = null;
+        const tryNext = () => {
+            if (attemptIndex >= urls.length) {
+                reject(new Error("Google TTS playback failed"));
+                return;
             }
+
+            const url = urls[attemptIndex];
+            attemptIndex += 1;
+            const audio = new Audio(url);
+            audio.preload = "auto";
+            audio.playbackRate = runtimeConfig.speechRate;
+            currentAudio = audio;
+
+            const cleanup = () => {
+                if (currentAudio === audio) {
+                    currentAudio = null;
+                }
+            };
+
+            const timeoutId = window.setTimeout(() => {
+                cleanup();
+                tryNext();
+            }, 8000);
+
+            audio.onended = () => {
+                window.clearTimeout(timeoutId);
+                cleanup();
+                resolve();
+            };
+            audio.onerror = () => {
+                window.clearTimeout(timeoutId);
+                cleanup();
+                tryNext();
+            };
+
+            audio.play().catch(() => {
+                window.clearTimeout(timeoutId);
+                cleanup();
+                tryNext();
+            });
         };
 
-        const timeoutId = window.setTimeout(() => {
-            cleanup();
-            reject(new Error("Google TTS playback timed out"));
-        }, 8000);
-
-        audio.onended = () => {
-            window.clearTimeout(timeoutId);
-            cleanup();
-            resolve();
-        };
-        audio.onerror = () => {
-            window.clearTimeout(timeoutId);
-            cleanup();
-            reject(new Error("Google TTS playback failed"));
-        };
-
-        audio.play().catch((err) => {
-            window.clearTimeout(timeoutId);
-            cleanup();
-            reject(err);
-        });
+        tryNext();
     });
 }
 
