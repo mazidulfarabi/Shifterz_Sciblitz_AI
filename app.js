@@ -4,90 +4,148 @@ const video = document.getElementById("webcam");
 const canvasElement = document.getElementById("output_canvas");
 const canvasCtx = canvasElement.getContext("2d");
 const outputDiv = document.getElementById("output");
+const supportedDiv = document.getElementById("supported-gestures");
+
 let gestureRecognizer = undefined;
 let lastVideoTime = -1;
 
-// 1. Initialize the Pre-Trained Gesture Recognizer
+const SUPPORTED_GESTURES = [
+    "Closed_Fist",
+    "Open_Palm",
+    "Pointing_Up",
+    "Thumb_Down",
+    "Thumb_Up",
+    "Victory",
+    "ILoveYou"
+];
+
 async function initializeGestureRecognizer() {
-    outputDiv.innerText = "Loading AI Model...";
-    
-    // Load the WebAssembly backend
-    const vision = await FilesetResolver.forVisionTasks(
-        "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.8/wasm"
-    );
-    
-    // Create the recognizer using Google's hosted model file
-    gestureRecognizer = await GestureRecognizer.createFromOptions(vision, {
-        baseOptions: {
-            modelAssetPath: "https://storage.googleapis.com/mediapipe-models/gesture_recognizer/gesture_recognizer/float16/1/gesture_recognizer.task",
-            delegate: "GPU"
-        },
-        runningMode: "VIDEO",
-        numHands: 1
-    });
-    
-    outputDiv.innerText = "Model Loaded. Starting Camera...";
-    startCamera();
+    if (window.location.protocol === "file:") {
+        outputDiv.innerText = "Open this app through a local server, not as a file.";
+        outputDiv.title = "Run: python -m http.server 8080 then visit http://localhost:8080";
+        return;
+    }
+
+    outputDiv.innerText = "Loading AI model...";
+
+    try {
+        const vision = await FilesetResolver.forVisionTasks(
+            "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.8/wasm"
+        );
+
+        const options = {
+            baseOptions: {
+                modelAssetPath:
+                    "https://storage.googleapis.com/mediapipe-models/gesture_recognizer/gesture_recognizer/float16/1/gesture_recognizer.task"
+            },
+            runningMode: "VIDEO",
+            numHands: 2,
+            minHandDetectionConfidence: 0.5,
+            minHandPresenceConfidence: 0.5,
+            minTrackingConfidence: 0.5,
+            cannedGesturesClassifierOptions: {
+                scoreThreshold: 0.35
+            }
+        };
+
+        try {
+            gestureRecognizer = await GestureRecognizer.createFromOptions(vision, {
+                ...options,
+                baseOptions: { ...options.baseOptions, delegate: "GPU" }
+            });
+        } catch (gpuError) {
+            console.warn("GPU delegate unavailable, falling back to CPU.", gpuError);
+            gestureRecognizer = await GestureRecognizer.createFromOptions(vision, {
+                ...options,
+                baseOptions: { ...options.baseOptions, delegate: "CPU" }
+            });
+        }
+
+        outputDiv.innerText = "Model loaded. Starting camera...";
+        await startCamera();
+    } catch (err) {
+        console.error("Failed to initialize gesture recognizer:", err);
+        outputDiv.innerText = "Failed to load the AI model. Check your internet connection and reload.";
+    }
 }
 
-// 2. Request Camera Permissions
-function startCamera() {
-    navigator.mediaDevices.getUserMedia({ video: { width: 640, height: 480 } })
-        .then((stream) => {
-            video.srcObject = stream;
-            video.addEventListener("loadeddata", predictWebcam);
-        })
-        .catch((err) => {
-            console.error("Camera access denied: ", err);
-            outputDiv.innerText = "Please allow camera access.";
+async function startCamera() {
+    if (!navigator.mediaDevices?.getUserMedia) {
+        outputDiv.innerText = "Camera access is not supported in this browser.";
+        return;
+    }
+
+    try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+            video: {
+                width: { ideal: 640 },
+                height: { ideal: 480 },
+                facingMode: "user"
+            }
         });
+
+        video.srcObject = stream;
+        video.addEventListener("loadeddata", () => {
+            canvasElement.width = video.videoWidth;
+            canvasElement.height = video.videoHeight;
+            video.play()
+                .then(() => predictWebcam())
+                .catch((playError) => {
+                    console.error("Unable to start video playback:", playError);
+                    outputDiv.innerText = "Unable to start the camera preview. Try reloading the page.";
+                });
+        }, { once: true });
+    } catch (err) {
+        console.error("Camera access denied:", err);
+        outputDiv.innerText = "Please allow camera access and reload the page.";
+    }
 }
 
-// 3. Continuous Detection & Translation Loop
-async function predictWebcam() {
-    canvasElement.width = video.videoWidth;
-    canvasElement.height = video.videoHeight;
-    
-    let startTimeMs = performance.now();
+function predictWebcam() {
+    if (!gestureRecognizer || video.readyState < 2) {
+        window.requestAnimationFrame(predictWebcam);
+        return;
+    }
+
     if (lastVideoTime !== video.currentTime) {
         lastVideoTime = video.currentTime;
-        
-        // Let the AI analyze the frame
-        const results = gestureRecognizer.recognizeForVideo(video, startTimeMs);
-        
+
+        const results = gestureRecognizer.recognizeForVideo(video, performance.now());
+
         canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
-        
-        if (results.gestures && results.gestures.length > 0) {
-            // Get the best guess gesture and its confidence score
+
+        if (results.gestures?.length > 0) {
             const topGesture = results.gestures[0][0];
             const confidence = Math.round(topGesture.score * 100);
-            
-            // Output translation (ignoring 'None' if it doesn't recognize a specific sign)
-            if (topGesture.categoryName !== "None") {
-                outputDiv.innerText = `Sign Detected: ${topGesture.categoryName} (${confidence}%)`;
+            const label = formatGestureName(topGesture.categoryName);
+
+            if (topGesture.categoryName !== "None" && topGesture.score >= 0.35) {
+                outputDiv.innerText = `Detected: ${label} (${confidence}%)`;
             } else {
-                outputDiv.innerText = "Detecting...";
+                outputDiv.innerText = "Show a supported hand gesture to the camera";
             }
-            
-            // Optional: Still draw the hand skeleton for visual feedback
-            if (results.landmarks) {
-                drawLandmarks(results.landmarks[0]);
+
+            if (results.landmarks?.length) {
+                results.landmarks.forEach((landmarks) => drawLandmarks(landmarks));
             }
         } else {
-            outputDiv.innerText = "No hand in frame";
+            outputDiv.innerText = "No hand detected — move your hand into the frame";
         }
     }
-    // Loop the function for the next frame
+
     window.requestAnimationFrame(predictWebcam);
 }
 
-// 4. Draw Coordinates on Canvas (Visual Feedback)
+function formatGestureName(name) {
+    return name.replace(/_/g, " ");
+}
+
 function drawLandmarks(landmarks) {
     canvasCtx.fillStyle = "#FF0000";
     canvasCtx.strokeStyle = "#00FF00";
     canvasCtx.lineWidth = 2;
-    
-    landmarks.forEach(landmark => {
+
+    landmarks.forEach((landmark) => {
         const x = landmark.x * canvasElement.width;
         const y = landmark.y * canvasElement.height;
         canvasCtx.beginPath();
@@ -96,5 +154,8 @@ function drawLandmarks(landmarks) {
     });
 }
 
-// Start the pipeline
+if (supportedDiv) {
+    supportedDiv.innerText = `Supported gestures: ${SUPPORTED_GESTURES.map(formatGestureName).join(", ")}`;
+}
+
 initializeGestureRecognizer();
