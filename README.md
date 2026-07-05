@@ -1,13 +1,12 @@
-# Spatial Vision Assistant
+# দৃশ্য সহায়ক (Spatial Vision Assistant)
 
-AI-powered object recognition for **blind and low-vision users**. The camera detects objects with [MediaPipe Object Detector](https://developers.google.com/mediapipe/solutions/vision/object_detector), adds **spatial context** (left / center / right, near / far), sends data to **n8n** for a natural sentence, and reads it aloud in the browser.
+**অন্ধ ও দৃষ্টিপ্রতিবন্ধী** ব্যবহারকারীদের জন্য AI-চালিত বস্তু ও হাতের ইশারা শনাক্তকরণ। ক্যামেরা [MediaPipe Object Detector](https://developers.google.com/mediapipe/solutions/vision/object_detector) দিয়ে বস্তু চেনে, **স্থানিক প্রসঙ্গ** (বাম / সামনে / ডান, কাছে / দূরে) যোগ করে, ব্যক্তি থাকলে [Gesture Recognizer](https://developers.google.com/mediapipe/solutions/vision/gesture_recognizer) দিয়ে হাতের ইশারা চেনে, এবং **বাংলায়** বর্ণনা পড়ে।
 
 ## Stack
 
 - Static HTML + ES modules (no build step)
-- MediaPipe Tasks Vision `ObjectDetector` (EfficientDet Lite0)
-- Web Speech API for text-to-speech
-- n8n webhook for spatial sentence generation
+- MediaPipe Tasks Vision: `ObjectDetector` + `GestureRecognizer`
+- Web Speech API (`bn-BD`) for Bengali text-to-speech
 - Netlify hosting
 
 ## Deploy to Netlify
@@ -17,24 +16,14 @@ AI-powered object recognition for **blind and low-vision users**. The camera det
 3. Build command: *(leave empty)* — `netlify.toml` handles publish directory `.`
 4. Deploy.
 
-## Configure n8n
-
-See **[N8N_SETUP.md](./N8N_SETUP.md)** for:
-
-- Webhook payload format
-- Expected JSON response
-- Importable workflow (`n8n-workflow-template.json`)
-- CORS headers
-- Optional LLM upgrade path
-
 ## Local config
 
 ```bash
 cp config.example.js config.js
-# Edit config.js with your n8n webhook URL
+# Edit MIN_INTERVAL_SEC if needed
 ```
 
-Or set the webhook in the in-app **Settings** panel (saved to browser localStorage).
+Or change settings in the in-app **সেটিংস** panel (saved to browser localStorage).
 
 ## Run locally
 
@@ -44,4 +33,21 @@ Serve over HTTP (not `file://`):
 npx serve .
 ```
 
-Camera + mic policies work best on HTTPS (Netlify provides this automatically).
+Camera policies work best on HTTPS (Netlify provides this automatically).
+
+## Hand gestures
+
+When a **person** is detected, the app runs MediaPipe Gesture Recognizer and announces gestures such as:
+
+| Gesture | Bengali |
+|---------|---------|
+| Open_Palm | খোলা হাত |
+| Closed_Fist | মুষ্ঠি |
+| Thumb_Up | থাম্বস আপ |
+| Victory | ভি (বিজয়) ইশারা |
+| Pointing_Up | উপরের দিকে আঙুল |
+| ILoveYou | আই লাভ ইউ ইশারা |
+
+## Bengali TTS note
+
+The browser picks a Bengali voice when available (`bn-BD`). Quality varies by OS/browser — Chrome on Windows may have limited Bengali voices. For production-quality TTS, consider Google Cloud or Azure Bengali voices via a small backend.

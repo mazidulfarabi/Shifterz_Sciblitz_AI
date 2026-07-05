@@ -1,13 +1,95 @@
-import { ObjectDetector, FilesetResolver } from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.8/vision_bundle.mjs";
+import {
+    ObjectDetector,
+    GestureRecognizer,
+    FilesetResolver
+} from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.8/vision_bundle.mjs";
 
-const STORAGE_KEY_WEBHOOK = "spatialVision.n8nWebhook";
-const STORAGE_KEY_USE_N8N = "spatialVision.useN8n";
 const STORAGE_KEY_INTERVAL = "spatialVision.intervalSec";
 const STORAGE_KEY_SPEECH_RATE = "spatialVision.speechRate";
 
 const DEFAULT_INTERVAL_SEC = 4;
 const SCORE_THRESHOLD = 0.45;
 const MAX_OBJECTS = 8;
+const GESTURE_SCORE_THRESHOLD = 0.6;
+const GESTURE_FRAME_SKIP = 2;
+const SPEECH_LANG = "bn-BD";
+
+const OBJECT_NAMES_BN = {
+    person: "একজন ব্যক্তি",
+    bicycle: "একটি সাইকেল",
+    car: "একটি গাড়ি",
+    motorcycle: "একটি মোটরসাইকেল",
+    bus: "একটি বাস",
+    train: "একটি ট্রেন",
+    truck: "একটি ট্রাক",
+    boat: "একটি নৌকা",
+    bird: "একটি পাখি",
+    cat: "একটি বিড়াল",
+    dog: "একটি কুকুর",
+    horse: "একটি ঘোড়া",
+    backpack: "একটি ব্যাকপ্যাক",
+    umbrella: "একটি ছাতা",
+    handbag: "একটি হ্যান্ডব্যাগ",
+    tie: "একটি টাই",
+    suitcase: "একটি স্যুটকেস",
+    bottle: "একটি বোতল",
+    cup: "একটি কাপ",
+    fork: "একটি কাঁটাচামচ",
+    knife: "একটি ছুরি",
+    spoon: "একটি চামচ",
+    bowl: "একটি বাটি",
+    banana: "একটি কলা",
+    apple: "একটি আপেল",
+    sandwich: "একটি স্যান্ডউইচ",
+    orange: "একটি কমলা",
+    pizza: "একটি পিজ্জা",
+    donut: "একটি ডোনাট",
+    cake: "একটি কেক",
+    chair: "একটি চেয়ার",
+    couch: "একটি সোফা",
+    "potted plant": "একটি গাছ",
+    bed: "একটি বিছানা",
+    "dining table": "একটি ডাইনিং টেবিল",
+    toilet: "একটি টয়লেট",
+    tv: "একটি টিভি",
+    laptop: "একটি ল্যাপটপ",
+    mouse: "একটি মাউস",
+    remote: "একটি রিমোট",
+    keyboard: "একটি কীবোর্ড",
+    "cell phone": "একটি মোবাইল ফোন",
+    microwave: "একটি মাইক্রোওয়েভ",
+    oven: "একটি ওভেন",
+    refrigerator: "একটি ফ্রিজ",
+    book: "একটি বই",
+    clock: "একটি ঘড়ি",
+    vase: "একটি ফুলদানি",
+    scissors: "একটি কাঁচি",
+    "teddy bear": "একটি টেডি বিয়ার",
+    toothbrush: "একটি টুথব্রাশ"
+};
+
+const GESTURE_NAMES_BN = {
+    Closed_Fist: "মুষ্ঠি",
+    Open_Palm: "খোলা হাত",
+    Pointing_Up: "উপরের দিকে আঙুল",
+    Thumb_Down: "থাম্বস ডাউন",
+    Thumb_Up: "থাম্বস আপ",
+    Victory: "ভি (বিজয়) ইশারা",
+    ILoveYou: "আই লাভ ইউ ইশারা"
+};
+
+const DEPTH_LABELS_BN = {
+    very_near: "খুব কাছে",
+    near: "কাছে",
+    medium: "মাঝারি দূরত্বে",
+    far: "দূরে"
+};
+
+const HORIZONTAL_LABELS_BN = {
+    left: "আপনার বামে",
+    center: "আপনার সামনে",
+    right: "আপনার ডানে"
+};
 
 const video = document.getElementById("webcam");
 const canvasElement = document.getElementById("output_canvas");
@@ -17,43 +99,50 @@ const stopBtn = document.getElementById("stop-btn");
 const scanBtn = document.getElementById("scan-btn");
 const settingsToggle = document.getElementById("settings-toggle");
 const settingsPanel = document.getElementById("settings-panel");
-const webhookInput = document.getElementById("webhook-url");
-const useN8nInput = document.getElementById("use-n8n");
 const intervalInput = document.getElementById("interval-sec");
 const speechRateInput = document.getElementById("speech-rate");
 const saveSettingsBtn = document.getElementById("save-settings");
 const statusRegion = document.getElementById("status");
 const announcementRegion = document.getElementById("announcement");
 const objectList = document.getElementById("object-list");
+const gestureList = document.getElementById("gesture-list");
 const muteBtn = document.getElementById("mute-btn");
 
 let objectDetector = undefined;
+let gestureRecognizer = undefined;
 let lastVideoTime = -1;
 let running = false;
 let muted = false;
-let lastN8nCallAt = 0;
+let lastAnnounceAt = 0;
 let lastSceneSignature = "";
-let pendingN8nRequest = false;
+let pendingAnnounce = false;
 let cameraStream = null;
-let defaultWebhookUrl = "";
+let gestureFrameCounter = 0;
+let lastGestures = [];
+let bnVoice = null;
 
 let runtimeConfig = {
-    webhookUrl: "",
-    useN8n: true,
     intervalSec: DEFAULT_INTERVAL_SEC,
     speechRate: 1
 };
 
+function initSpeech() {
+    const pickVoice = () => {
+        const voices = window.speechSynthesis?.getVoices() || [];
+        bnVoice = voices.find((voice) => voice.lang.startsWith("bn")) || null;
+    };
+
+    pickVoice();
+    if (window.speechSynthesis) {
+        window.speechSynthesis.onvoiceschanged = pickVoice;
+    }
+}
+
 async function loadRuntimeConfig() {
     try {
         const mod = await import("./config.js");
-        defaultWebhookUrl = mod.N8N_WEBHOOK_URL || "";
-        runtimeConfig.webhookUrl = localStorage.getItem(STORAGE_KEY_WEBHOOK) || defaultWebhookUrl;
-        runtimeConfig.useN8n = localStorage.getItem(STORAGE_KEY_USE_N8N) !== "false" && mod.USE_N8N !== false;
-        runtimeConfig.intervalSec = Number(localStorage.getItem(STORAGE_KEY_INTERVAL)) || mod.N8N_MIN_INTERVAL_SEC || DEFAULT_INTERVAL_SEC;
+        runtimeConfig.intervalSec = Number(localStorage.getItem(STORAGE_KEY_INTERVAL)) || mod.MIN_INTERVAL_SEC || DEFAULT_INTERVAL_SEC;
     } catch {
-        runtimeConfig.webhookUrl = localStorage.getItem(STORAGE_KEY_WEBHOOK) || "";
-        runtimeConfig.useN8n = localStorage.getItem(STORAGE_KEY_USE_N8N) !== "false";
         runtimeConfig.intervalSec = Number(localStorage.getItem(STORAGE_KEY_INTERVAL)) || DEFAULT_INTERVAL_SEC;
     }
 
@@ -62,8 +151,6 @@ async function loadRuntimeConfig() {
 }
 
 function syncSettingsForm() {
-    webhookInput.value = runtimeConfig.webhookUrl;
-    useN8nInput.checked = runtimeConfig.useN8n;
     intervalInput.value = String(runtimeConfig.intervalSec);
     speechRateInput.value = String(runtimeConfig.speechRate);
 }
@@ -85,16 +172,18 @@ function withTimeout(promise, ms, label) {
     ]);
 }
 
-async function loadObjectDetector() {
-    setStatus("Loading object recognition model. First load may take 30 to 60 seconds.");
-
-    const vision = await withTimeout(
+async function loadVisionTasks() {
+    return withTimeout(
         FilesetResolver.forVisionTasks(
             "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.8/wasm"
         ),
         60000,
         "MediaPipe WASM load"
     );
+}
+
+async function loadObjectDetector(vision) {
+    setStatus("বস্তু শনাক্তকরণ মডেল লোড হচ্ছে। প্রথমবার ৩০–৬০ সেকেন্ড লাগতে পারে।");
 
     return withTimeout(
         ObjectDetector.createFromOptions(vision, {
@@ -113,12 +202,28 @@ async function loadObjectDetector() {
     );
 }
 
+async function loadGestureRecognizer(vision) {
+    return withTimeout(
+        GestureRecognizer.createFromOptions(vision, {
+            baseOptions: {
+                modelAssetPath:
+                    "https://storage.googleapis.com/mediapipe-models/gesture_recognizer/gesture_recognizer/float16/1/gesture_recognizer.task",
+                delegate: "CPU"
+            },
+            runningMode: "VIDEO",
+            numHands: 2
+        }),
+        120000,
+        "Gesture recognizer model load"
+    );
+}
+
 async function startCamera() {
     if (!navigator.mediaDevices?.getUserMedia) {
-        throw new Error("Camera access is not supported in this browser.");
+        throw new Error("এই ব্রাউজারে ক্যামেরা সমর্থিত নয়।");
     }
 
-    setStatus("Requesting camera permission.");
+    setStatus("ক্যামেরার অনুমতি চাওয়া হচ্ছে।");
 
     cameraStream = await navigator.mediaDevices.getUserMedia({
         video: {
@@ -131,7 +236,7 @@ async function startCamera() {
 
     await new Promise((resolve, reject) => {
         video.onloadedmetadata = () => resolve();
-        video.onerror = () => reject(new Error("Camera preview failed to start."));
+        video.onerror = () => reject(new Error("ক্যামেরা প্রিভিউ শুরু করতে ব্যর্থ।"));
         video.srcObject = cameraStream;
     });
 
@@ -152,7 +257,9 @@ function stopCamera() {
     startBtn.hidden = false;
     stopBtn.hidden = true;
     scanBtn.hidden = true;
-    setStatus("Camera stopped.");
+    lastGestures = [];
+    renderGestureList([]);
+    setStatus("ক্যামেরা বন্ধ।");
 }
 
 function horizontalZone(centerX) {
@@ -169,13 +276,16 @@ function depthFromArea(area) {
 }
 
 function depthLabel(depth) {
-    const labels = {
-        very_near: "very close",
-        near: "close",
-        medium: "at medium distance",
-        far: "far away"
-    };
-    return labels[depth] || depth;
+    return DEPTH_LABELS_BN[depth] || depth;
+}
+
+function horizontalLabel(horizontal) {
+    return HORIZONTAL_LABELS_BN[horizontal] || horizontal;
+}
+
+function objectNameBn(obj) {
+    const key = obj.label.toLowerCase();
+    return OBJECT_NAMES_BN[key] || OBJECT_NAMES_BN[obj.display_name.toLowerCase()] || `একটি ${obj.display_name.replace(/_/g, " ")}`;
 }
 
 function spatialPosition(bbox, frameWidth, frameHeight) {
@@ -226,81 +336,95 @@ function normalizeDetections(detections) {
         .sort((a, b) => b.confidence - a.confidence);
 }
 
-function sceneSignature(objects) {
-    return objects
+function hasPerson(objects) {
+    return objects.some((obj) => obj.label.toLowerCase() === "person");
+}
+
+function detectGestures() {
+    if (!gestureRecognizer || video.readyState < 2) {
+        return [];
+    }
+
+    const results = gestureRecognizer.recognizeForVideo(video, performance.now());
+    const fw = video.videoWidth || 1;
+    const gestures = [];
+
+    (results.gestures || []).forEach((handGestures, handIndex) => {
+        const topGesture = handGestures?.[0];
+        if (!topGesture || topGesture.score < GESTURE_SCORE_THRESHOLD) {
+            return;
+        }
+
+        if (topGesture.categoryName === "None") {
+            return;
+        }
+
+        const landmarks = results.landmarks?.[handIndex];
+        const wrist = landmarks?.[0];
+        const centerX = wrist ? wrist.x : 0.5;
+
+        gestures.push({
+            hand: handIndex === 0 ? "ডান হাত" : "বাম হাত",
+            gesture: topGesture.categoryName,
+            gesture_bn: GESTURE_NAMES_BN[topGesture.categoryName] || topGesture.displayName || topGesture.categoryName,
+            confidence: Number(topGesture.score.toFixed(3)),
+            horizontal: horizontalZone(centerX)
+        });
+    });
+
+    return gestures;
+}
+
+function sceneSignature(objects, gestures) {
+    const objectPart = objects
         .map((obj) => `${obj.label}:${obj.position.horizontal}:${obj.position.depth}`)
         .sort()
         .join("|");
+
+    const gesturePart = gestures
+        .map((gesture) => `${gesture.hand}:${gesture.gesture}:${gesture.horizontal}`)
+        .sort()
+        .join("|");
+
+    return `${objectPart}::${gesturePart}`;
 }
 
-function buildPayload(objects) {
-    return {
-        source: "spatial-vision-assistant",
-        version: "1.0",
-        timestamp: new Date().toISOString(),
-        frame: {
-            width: video.videoWidth,
-            height: video.videoHeight
-        },
-        object_count: objects.length,
-        objects,
-        hints: {
-            horizontal_axis: "left is camera-left (user's left when facing same direction as camera)",
-            depth_proxy: "bbox area — larger means closer",
-            purpose: "Convert detections into one concise spatial sentence for a blind user"
+function buildSpatialSentence(objects, gestures) {
+    const parts = [];
+
+    if (objects.length === 0 && gestures.length === 0) {
+        return "আপনার সামনে কোনো চিহ্নিত বস্তু দেখছি না।";
+    }
+
+    if (objects.length > 0) {
+        const objectParts = objects.slice(0, 4).map((obj) => {
+            const name = objectNameBn(obj);
+            const where = horizontalLabel(obj.position.horizontal);
+            return `${name}, ${depthLabel(obj.position.depth)}, ${where}`;
+        });
+
+        if (objectParts.length === 1) {
+            parts.push(`আমি দেখছি ${objectParts[0]}`);
+        } else {
+            const last = objectParts.pop();
+            parts.push(`আমি দেখছি ${objectParts.join("; ")}, এবং ${last}`);
         }
-    };
-}
-
-function buildLocalSpatialSentence(objects) {
-    if (objects.length === 0) {
-        return "I do not see any recognizable objects in front of you.";
     }
 
-    const parts = objects.slice(0, 4).map((obj) => {
-        const where =
-            obj.position.horizontal === "center"
-                ? "in front of you"
-                : `on your ${obj.position.horizontal}`;
-        return `a ${obj.display_name.replace(/_/g, " ")}, ${depthLabel(obj.position.depth)}, ${where}`;
-    });
+    if (gestures.length > 0) {
+        const gestureParts = gestures.map((gesture) => {
+            const where = horizontalLabel(gesture.horizontal);
+            return `${where} ${gesture.hand} ${gesture.gesture_bn} ইশারা দেখাচ্ছে`;
+        });
 
-    if (objects.length === 1) {
-        return `I see ${parts[0]}.`;
+        if (parts.length === 0) {
+            parts.push(gestureParts.join("; "));
+        } else {
+            parts.push(`এছাড়াও, ${gestureParts.join("; ")}`);
+        }
     }
 
-    const last = parts.pop();
-    return `I see ${parts.join("; ")}, and ${last}.`;
-}
-
-async function sendToN8n(payload) {
-    const url = runtimeConfig.webhookUrl.trim();
-    if (!url || !runtimeConfig.useN8n) {
-        return null;
-    }
-
-    const response = await fetch(url, {
-        method: "POST",
-        headers: {
-            "Content-Type": "application/json"
-        },
-        body: JSON.stringify(payload)
-    });
-
-    if (!response.ok) {
-        throw new Error(`n8n webhook returned ${response.status}`);
-    }
-
-    const text = await response.text();
-    if (!text) {
-        return null;
-    }
-
-    try {
-        return JSON.parse(text);
-    } catch {
-        return { spatial_sentence: text.trim() };
-    }
+    return `${parts.join(". ")}।`;
 }
 
 function speak(text) {
@@ -310,9 +434,15 @@ function speak(text) {
 
     window.speechSynthesis.cancel();
     const utterance = new SpeechSynthesisUtterance(text);
+    utterance.lang = SPEECH_LANG;
     utterance.rate = runtimeConfig.speechRate;
     utterance.pitch = 1;
     utterance.volume = 1;
+
+    if (bnVoice) {
+        utterance.voice = bnVoice;
+    }
+
     window.speechSynthesis.speak(utterance);
 }
 
@@ -321,21 +451,42 @@ function renderObjectList(objects) {
 
     if (objects.length === 0) {
         const item = document.createElement("li");
-        item.textContent = "No objects detected";
+        item.textContent = "কোনো বস্তু শনাক্ত হয়নি";
         objectList.appendChild(item);
         return;
     }
 
     objects.forEach((obj) => {
         const item = document.createElement("li");
-        item.textContent = `${obj.display_name} — ${depthLabel(obj.position.depth)}, ${obj.position.horizontal} (${Math.round(obj.confidence * 100)}%)`;
+        item.textContent = `${objectNameBn(obj)} — ${depthLabel(obj.position.depth)}, ${horizontalLabel(obj.position.horizontal)} (${Math.round(obj.confidence * 100)}%)`;
         objectList.appendChild(item);
     });
 }
 
-function drawDetections(objects) {
+function renderGestureList(gestures) {
+    if (!gestureList) {
+        return;
+    }
+
+    gestureList.innerHTML = "";
+
+    if (gestures.length === 0) {
+        const item = document.createElement("li");
+        item.textContent = "কোনো হাতের ইশারা শনাক্ত হয়নি";
+        gestureList.appendChild(item);
+        return;
+    }
+
+    gestures.forEach((gesture) => {
+        const item = document.createElement("li");
+        item.textContent = `${gesture.hand} — ${gesture.gesture_bn}, ${horizontalLabel(gesture.horizontal)} (${Math.round(gesture.confidence * 100)}%)`;
+        gestureList.appendChild(item);
+    });
+}
+
+function drawDetections(objects, gestures) {
     canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
-    canvasCtx.lineWidth = +2;
+    canvasCtx.lineWidth = 2;
     canvasCtx.font = "14px sans-serif";
 
     objects.forEach((obj) => {
@@ -349,16 +500,25 @@ function drawDetections(objects) {
         canvasCtx.fillRect(x, y, w, h);
         canvasCtx.strokeRect(x, y, w, h);
 
-        const tag = `${obj.display_name} ${Math.round(obj.confidence * 100)}%`;
+        const tag = `${objectNameBn(obj)} ${Math.round(obj.confidence * 100)}%`;
         canvasCtx.fillStyle = "#14532d";
         canvasCtx.fillRect(x, Math.max(0, y - 18), canvasCtx.measureText(tag).width + 8, 18);
         canvasCtx.fillStyle = "#ecfdf5";
         canvasCtx.fillText(tag, x + 4, Math.max(12, y - 5));
     });
+
+    gestures.forEach((gesture, index) => {
+        const y = 24 + index * 22;
+        const tag = `${gesture.gesture_bn} (${gesture.hand})`;
+        canvasCtx.fillStyle = "#1e3a8a";
+        canvasCtx.fillRect(8, y - 16, canvasCtx.measureText(tag).width + 10, 20);
+        canvasCtx.fillStyle = "#dbeafe";
+        canvasCtx.fillText(tag, 12, y);
+    });
 }
 
-async function announceScene(objects, force = false) {
-    const signature = sceneSignature(objects);
+async function announceScene(objects, gestures, force = false) {
+    const signature = sceneSignature(objects, gestures);
     const now = Date.now();
     const intervalMs = runtimeConfig.intervalSec * 1000;
 
@@ -366,45 +526,37 @@ async function announceScene(objects, force = false) {
         return;
     }
 
-    if (!force && now - lastN8nCallAt < intervalMs) {
+    if (!force && now - lastAnnounceAt < intervalMs) {
         return;
     }
 
-    if (pendingN8nRequest) {
+    if (pendingAnnounce) {
         return;
     }
 
     lastSceneSignature = signature;
-    lastN8nCallAt = now;
-    pendingN8nRequest = true;
+    lastAnnounceAt = now;
+    pendingAnnounce = true;
 
-    const payload = buildPayload(objects);
-    let sentence = buildLocalSpatialSentence(objects);
+    const sentence = buildSpatialSentence(objects, gestures);
 
-    try {
-        if (runtimeConfig.useN8n && runtimeConfig.webhookUrl.trim()) {
-            setStatus("Describing scene...");
-            const n8nResult = await sendToN8n(payload);
-            if (n8nResult?.spatial_sentence) {
-                sentence = n8nResult.spatial_sentence;
-            } else if (n8nResult?.message) {
-                sentence = n8nResult.message;
-            }
-        }
-    } catch (err) {
-        console.warn("n8n unavailable, using local description:", err);
-        setStatus("Using local description (n8n unavailable).");
-    } finally {
-        pendingN8nRequest = false;
-    }
+    pendingAnnounce = false;
 
     setAnnouncement(sentence);
     speak(sentence);
 
-    if (objects.length === 0) {
-        setStatus("Scanning. No objects in view.");
+    if (objects.length === 0 && gestures.length === 0) {
+        setStatus("স্ক্যান চলছে। কোনো বস্তু দেখা যাচ্ছে না।");
     } else {
-        setStatus(`Scanning. ${objects.length} object${objects.length === 1 ? "" : "s"} detected.`);
+        const objectCount = objects.length;
+        const gestureCount = gestures.length;
+        let status = `স্ক্যান চলছে। ${objectCount}টি বস্তু`;
+
+        if (gestureCount > 0) {
+            status += `, ${gestureCount}টি হাতের ইশারা`;
+        }
+
+        setStatus(`${status} শনাক্ত হয়েছে।`);
     }
 }
 
@@ -416,9 +568,23 @@ function processFrame(forceAnnounce = false) {
     const results = objectDetector.detectForVideo(video, performance.now());
     const objects = normalizeDetections(results.detections || []);
 
-    drawDetections(objects);
+    let gestures = lastGestures;
+    if (hasPerson(objects)) {
+        gestureFrameCounter += 1;
+        if (forceAnnounce || gestureFrameCounter % GESTURE_FRAME_SKIP === 0) {
+            gestures = detectGestures();
+            lastGestures = gestures;
+        }
+    } else {
+        gestureFrameCounter = 0;
+        gestures = [];
+        lastGestures = [];
+    }
+
+    drawDetections(objects, gestures);
     renderObjectList(objects);
-    announceScene(objects, forceAnnounce);
+    renderGestureList(gestures);
+    announceScene(objects, gestures, forceAnnounce);
 }
 
 function predictWebcam() {
@@ -440,50 +606,48 @@ async function startApp() {
     }
 
     if (window.location.protocol === "file:") {
-        setStatus("Open this page over HTTPS (for example on Netlify) for reliable camera access.");
+        setStatus("নির্ভরযোগ্য ক্যামেরার জন্য HTTPS-এ (যেমন Netlify) পৃষ্ঠাটি খুলুন।");
     }
 
     startBtn.disabled = true;
 
     try {
         await startCamera();
-        setStatus("Camera active. Loading object recognition model.");
-        objectDetector = await loadObjectDetector();
+        setStatus("ক্যামেরা চালু। মডেল লোড হচ্ছে।");
+        const vision = await loadVisionTasks();
+        objectDetector = await loadObjectDetector(vision);
+        gestureRecognizer = await loadGestureRecognizer(vision);
         running = true;
         startBtn.hidden = true;
         stopBtn.hidden = false;
         scanBtn.hidden = false;
-        setStatus("Ready. Point the camera at your surroundings.");
-        setAnnouncement("Vision assistant started.");
-        speak("Vision assistant started. I will describe objects around you.");
+        setStatus("প্রস্তুত। ক্যামেরা আপনার চারপাশের দিকে ধরুন।");
+        setAnnouncement("দৃশ্য সহায়ক চালু হয়েছে।");
+        speak("দৃশ্য সহায়ক চালু হয়েছে। আমি আপনার চারপাশের বস্তু এবং হাতের ইশারা বর্ণনা করব।");
         predictWebcam();
     } catch (err) {
         console.error(err);
         startBtn.disabled = false;
 
         if (err.name === "NotAllowedError" || err.name === "PermissionDeniedError") {
-            setStatus("Camera blocked. Allow camera access, then press Start again.");
+            setStatus("ক্যামেরা ব্লক করা। অনুমতি দিন, তারপর আবার শুরু চাপুন।");
         } else if (err.name === "NotFoundError") {
-            setStatus("No camera found. Connect a camera and try again.");
+            setStatus("কোনো ক্যামেরা পাওয়া যায়নি। ক্যামেরা সংযুক্ত করে আবার চেষ্টা করুন।");
         } else {
-            setStatus(`Error: ${err.message}`);
+            setStatus(`ত্রুটি: ${err.message}`);
         }
     }
 }
 
 function saveSettings() {
-    runtimeConfig.webhookUrl = webhookInput.value.trim();
-    runtimeConfig.useN8n = useN8nInput.checked;
     runtimeConfig.intervalSec = Math.max(2, Number(intervalInput.value) || DEFAULT_INTERVAL_SEC);
     runtimeConfig.speechRate = Math.min(2, Math.max(0.5, Number(speechRateInput.value) || 1));
 
-    localStorage.setItem(STORAGE_KEY_WEBHOOK, runtimeConfig.webhookUrl);
-    localStorage.setItem(STORAGE_KEY_USE_N8N, String(runtimeConfig.useN8n));
     localStorage.setItem(STORAGE_KEY_INTERVAL, String(runtimeConfig.intervalSec));
     localStorage.setItem(STORAGE_KEY_SPEECH_RATE, String(runtimeConfig.speechRate));
 
-    setStatus("Settings saved.");
-    speak("Settings saved.");
+    setStatus("সেটিংস সংরক্ষিত।");
+    speak("সেটিংস সংরক্ষিত।");
 }
 
 settingsToggle.addEventListener("click", () => {
@@ -504,7 +668,7 @@ scanBtn.addEventListener("click", () => {
 muteBtn.addEventListener("click", () => {
     muted = !muted;
     muteBtn.setAttribute("aria-pressed", String(muted));
-    muteBtn.textContent = muted ? "Unmute speech" : "Mute speech";
+    muteBtn.textContent = muted ? "কথা চালু করুন" : "কথা বন্ধ করুন";
     if (muted) {
         window.speechSynthesis?.cancel();
     }
@@ -521,4 +685,5 @@ document.addEventListener("keydown", (event) => {
     }
 });
 
+initSpeech();
 await loadRuntimeConfig();

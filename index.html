@@ -1,10 +1,10 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="bn">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Spatial Vision Assistant</title>
-    <meta name="description" content="Real-time object recognition with spatial audio descriptions for blind and low-vision users.">
+    <title>দৃশ্য সহায়ক</title>
+    <meta name="description" content="অন্ধ ও দৃষ্টিপ্রতিবন্ধী ব্যবহারকারীদের জন্য বাস্তব সময়ে বস্তু ও হাতের ইশারা শনাক্ত করে বাংলায় বর্ণনা।">
     <link rel="icon" href="data:,">
     <style>
         :root {
@@ -21,7 +21,7 @@
         * { box-sizing: border-box; }
 
         body {
-            font-family: system-ui, -apple-system, Segoe UI, sans-serif;
+            font-family: system-ui, -apple-system, "Segoe UI", "Noto Sans Bengali", sans-serif;
             margin: 0;
             min-height: 100vh;
             background: var(--bg);
@@ -146,7 +146,8 @@
 
         canvas { pointer-events: none; }
 
-        #object-list {
+        #object-list,
+        #gesture-list {
             margin: 8px 0 0;
             padding-left: 20px;
             color: var(--muted);
@@ -162,7 +163,6 @@
             color: var(--muted);
         }
 
-        #settings-panel input[type="url"],
         #settings-panel input[type="number"] {
             width: 100%;
             margin-top: 6px;
@@ -188,33 +188,33 @@
     </style>
 </head>
 <body>
-    <a class="skip-link" href="#main-content">Skip to main content</a>
+    <a class="skip-link" href="#main-content">মূল বিষয়বস্তুতে যান</a>
 
     <main id="main-content">
-        <h1>Spatial Vision Assistant</h1>
+        <h1>দৃশ্য সহায়ক</h1>
         <p class="subtitle">
-            Describes objects around you in plain language — optimized for blind and low-vision users.
-            Uses MediaPipe EfficientDet-Lite0 object detection and optional n8n for natural spatial sentences.
+            আপনার চারপাশের বস্তু ও হাতের ইশারা সহজ বাংলায় বর্ণনা করে — অন্ধ ও দৃষ্টিপ্রতিবন্ধী ব্যবহারকারীদের জন্য।
+            MediaPipe দিয়ে বস্তু শনাক্তকরণ ও হাতের ইশারা চেনা হয়; সব বর্ণনা ব্রাউজারেই তৈরি হয়।
         </p>
 
-        <div class="controls" role="toolbar" aria-label="Vision assistant controls">
-            <button id="start-btn" class="btn-primary" type="button">Start camera</button>
-            <button id="stop-btn" class="btn-danger" type="button" hidden>Stop camera</button>
+        <div class="controls" role="toolbar" aria-label="দৃশ্য সহায়ক নিয়ন্ত্রণ">
+            <button id="start-btn" class="btn-primary" type="button">ক্যামেরা চালু করুন</button>
+            <button id="stop-btn" class="btn-danger" type="button" hidden>ক্যামেরা বন্ধ করুন</button>
             <button id="scan-btn" class="btn-secondary" type="button" hidden aria-keyshortcuts="Space">
-                Describe now (Space)
+                এখনই বর্ণনা করুন (Space)
             </button>
             <button id="mute-btn" class="btn-secondary" type="button" aria-pressed="false">
-                Mute speech
+                কথা বন্ধ করুন
             </button>
             <button id="settings-toggle" class="btn-secondary" type="button" aria-expanded="false" aria-controls="settings-panel">
-                Settings
+                সেটিংস
             </button>
         </div>
 
         <section class="panel" aria-labelledby="announcement-heading">
-            <h2 id="announcement-heading">Current description</h2>
+            <h2 id="announcement-heading">বর্তমান বর্ণনা</h2>
             <div id="announcement" role="status" aria-live="assertive" aria-atomic="true">
-                Press Start camera to begin.
+                শুরু করতে ক্যামেরা চালু করুন চাপুন।
             </div>
             <p id="status" aria-live="polite"></p>
         </section>
@@ -225,35 +225,34 @@
         </div>
 
         <section class="panel" aria-labelledby="objects-heading">
-            <h2 id="objects-heading">Detected objects</h2>
+            <h2 id="objects-heading">শনাক্ত বস্তু</h2>
             <ul id="object-list">
-                <li>Waiting for camera...</li>
+                <li>ক্যামেরার জন্য অপেক্ষা...</li>
+            </ul>
+        </section>
+
+        <section class="panel" aria-labelledby="gestures-heading">
+            <h2 id="gestures-heading">হাতের ইশারা</h2>
+            <p class="help">ব্যক্তি শনাক্ত হলে MediaPipe হাতের ইশারা চেনে (মুষ্ঠি, খোলা হাত, থাম্বস আপ ইত্যাদি)।</p>
+            <ul id="gesture-list">
+                <li>ব্যক্তি শনাক্ত হলে ইশারা দেখাবে</li>
             </ul>
         </section>
 
         <section class="panel">
-            <h2>Settings</h2>
+            <h2>সেটিংস</h2>
             <div id="settings-panel" hidden>
-                <label for="webhook-url">
-                    n8n webhook URL
-                    <input id="webhook-url" type="url" placeholder="https://your-n8n.app.n8n.cloud/webhook/spatial-vision" autocomplete="off">
-                </label>
-                <label for="use-n8n">
-                    <input id="use-n8n" type="checkbox" checked>
-                    Send detections to n8n for natural spatial sentences
-                </label>
                 <label for="interval-sec">
-                    Minimum seconds between automatic descriptions
+                    স্বয়ংক্রিয় বর্ণনার মধ্যে ন্যূনতম সময় (সেকেন্ড)
                     <input id="interval-sec" type="number" min="2" max="30" step="1" value="4">
                 </label>
                 <label for="speech-rate">
-                    Speech rate (0.5 – 2)
+                    কথার গতি (০.৫ – ২)
                     <input id="speech-rate" type="number" min="0.5" max="2" step="0.1" value="1">
                 </label>
-                <button id="save-settings" class="btn-primary" type="button">Save settings</button>
+                <button id="save-settings" class="btn-primary" type="button">সেটিংস সংরক্ষণ</button>
                 <p class="help">
-                    Copy <code>config.example.js</code> to <code>config.js</code> to set a default webhook before deploy,
-                    or paste your n8n webhook here. See <code>N8N_SETUP.md</code> for workflow setup.
+                    ঐচ্ছিক: <code>config.example.js</code> কপি করে <code>config.js</code> বানিয়ে ডিফল্ট মান সেট করুন।
                 </p>
             </div>
         </section>
