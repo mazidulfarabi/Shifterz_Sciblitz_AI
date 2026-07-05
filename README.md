@@ -1,53 +1,182 @@
-# দৃশ্য সহায়ক (Spatial Vision Assistant)
+# দৃষ্টি সহায়ক (Dristi Sohayok)
 
-**অন্ধ ও দৃষ্টিপ্রতিবন্ধী** ব্যবহারকারীদের জন্য AI-চালিত বস্তু ও হাতের ইশারা শনাক্তকরণ। ক্যামেরা [MediaPipe Object Detector](https://developers.google.com/mediapipe/solutions/vision/object_detector) দিয়ে বস্তু চেনে, **স্থানিক প্রসঙ্গ** (বাম / সামনে / ডান, কাছে / দূরে) যোগ করে, ব্যক্তি থাকলে [Gesture Recognizer](https://developers.google.com/mediapipe/solutions/vision/gesture_recognizer) দিয়ে হাতের ইশারা চেনে, এবং **বাংলায়** বর্ণনা পড়ে।
+দৃষ্টি সহায়ক হলো একটি আর্টিফিশিয়াল ইন্টেলিজেন্স-চালিত, ব্রাউজার-ভিত্তিক সহায়ক অ্যাপ্লিকেশন, যা অন্ধ ও দৃষ্টিপ্রতিবন্ধী ব্যবহারকারীদের জন্য বাস্তব সময়ে তাদের চারপাশের বস্তু, স্থানিক অবস্থান এবং হাতের ইশারা শনাক্ত করে সহজ বাংলায় বর্ণনা দেয়। অ্যাপটি একটি ওয়েবপেজ হিসেবে কাজ করে, তাই ব্যবহারকারীকে কোনো সফটওয়্যার ইনস্টল করতে হয় না। শুধু একটি ক্যামেরা ও একটি ব্রাউজার থাকলেই এটির ব্যবহার সম্ভব।
 
-## Stack
+## মূল উদ্দেশ্য
 
-- Static HTML + ES modules (no build step)
-- MediaPipe Tasks Vision: `ObjectDetector` + `GestureRecognizer`
-- Web Speech API (`bn-BD`) for Bengali text-to-speech
-- Netlify hosting
+এই অ্যাপের মূল লক্ষ্য হলো:
 
-## Deploy to Netlify
+- মানুষের চারপাশে কী কী বস্তু আছে তা শনাক্ত করা
+- প্রতিটি বস্তুর অবস্থান বর্ণনা করা, যেমন বাম/সামনে/ডান, কাছে/দূরে
+- কোনো ব্যক্তি শনাক্ত হলে তার হাতের ইশারা বুঝে বলা
+- সব বর্ণনা বাংলায়, সহজ ও স্পষ্ট ভাষায় শোনানো
+- ব্যবহারকারীর কাছে তথ্য পৌঁছে দেওয়ার জন্য একটি 접근যোগ্য, কম-জটিল ইন্টারফেস তৈরি করা
 
-1. Push this folder to GitHub/GitLab.
-2. Netlify → **Add new site** → import repo.
-3. Build command: *(leave empty)* — `netlify.toml` handles publish directory `.`
-4. Deploy.
+## কী কী ফিচার আছে
 
-## Local config
+### 1. বস্তু শনাক্তকরণ
+- webcam এর মাধ্যমে ক্যামেরা ফুটেজ থেকে বস্তু শনাক্ত করা হয়
+- MediaPipe Object Detector ব্যবহার করে বিভিন্ন সাধারণ বস্তু চেনা হয়
+- প্রতিটি বস্তুর নাম এবং এর আত্মবিশ্বাসের স্তর নির্ণয় করা হয়
 
-```bash
-cp config.example.js config.js
-# Edit MIN_INTERVAL_SEC if needed
-```
+### 2. স্থানিক বর্ণনা
+- প্রতিটি বস্তুর অবস্থান বর্ণনা করা হয়
+- উদাহরণস্বরূপ:
+  - বাম/সামনে/ডান
+  - খুব কাছে/কাছে/মাঝারি/দূরে
+- এতে ব্যবহারকারী বুঝতে পারে বস্তুটি কোথায় আছে
 
-Or change settings in the in-app **সেটিংস** panel (saved to browser localStorage).
+### 3. হাতের ইশারা শনাক্তকরণ
+- যদি এক বা একাধিক ব্যক্তি শনাক্ত করা যায়, তবে সেটি Gesture Recognizer ব্যবহার করে হাতের ইশারা বুঝে
+- উদাহরণস্বরূপ: খোলা হাত, মুঠি, থাম্বস আপ, ভি-সাইন, উপরের দিকে আঙুল, আই লাভ ইউ
 
-## Run locally
+### 4. বাংলা টেক্সট-টু-স্পিচ
+- বর্ণনাকে বাংলায় পড়ে শোনানো হয়
+- ব্রাউজারের অভ্যন্তরীণ টেক্সট-টু-স্পিচ বা Google TTS এর মতো পদ্ধতি ব্যবহার করা যায়
+- ব্যবহারকারীর কম্পিউটার/ফোনে কী কী টুল সমর্থিত সেটি অনুযায়ী কাজ করে
 
-Serve over HTTP (not `file://`):
+### 5. সহজ এবং অ্যাক্সেসিবল UI
+- বড় বোতাম
+- পরিষ্কার বর্ণনা
+- সহজ ভাষা
+- অটোমেটিক বর্ণনা প্রদর্শন
+
+## প্রযুক্তি স্ট্যাক
+
+এই প্রজেক্টটি একটি স্ট্যাটিক ওয়েব অ্যাপ হিসেবে তৈরি করা হয়েছে। এর মূল উপাদানগুলো হলো:
+
+- HTML5 for structure
+- CSS3 for styling and accessibility-friendly layout
+- JavaScript ES modules for app logic
+- MediaPipe Tasks Vision for object and gesture recognition
+- Web Speech API / browser-based speech playback
+- Netlify for hosting
+
+## প্রজেক্টের কার্যপ্রণালী
+
+1. ব্যবহারকারী ক্যামেরা চালু করেন
+2. ব্রাউজার ক্যামেরা অ্যাক্সেস করে ভিডিও stream শুরু করে
+3. MediaPipe model ভিডিও ফ্রেমে বস্তু শনাক্ত করে
+4. শনাক্ত বস্তুগুলোর অবস্থান এবং আত্মবিশ্বাসের মান বের করা হয়
+5. যদি কোনো ব্যক্তি শনাক্ত হয়, তাহলে হাতের ইশারা শনাক্ত করার চেষ্টা করা হয়
+6. সব তথ্য নিয়ে একটি বাংলা বর্ণনা তৈরি করা হয়
+7. সে বর্ণনা টেক্সট-টু-স্পিচের মাধ্যমে শোনা যায়
+
+## ফোল্ডার/ফাইলের ভূমিকা
+
+- [index.html](index.html): মূল UI, buttons, camera preview, announcement section
+- [app.js](app.js): application logic, camera handling, object detection, gesture detection, speech output
+- [config.example.js](config.example.js): example config file for tuning interval settings
+- [netlify.toml](netlify.toml): Netlify deployment configuration
+- [README.md](README.md): project documentation
+
+## কীভাবে চালাবেন
+
+### 1. স্থানীয়ভাবে চালানো
+
+প্রথমে প্রজেক্ট ফোল্ডারটি খুলুন। তারপর একটি local server দিয়ে চালাতে হবে, কারণ ক্যামেরা এবং কিছু browser APIs সরাসরি file:// ডিরেক্টরিতে কাজ নাও করতে পারে।
 
 ```bash
 npx serve .
 ```
 
-Camera policies work best on HTTPS (Netlify provides this automatically).
+এরপর ব্রাউজারে খুলুন:
 
-## Hand gestures
+```text
+http://localhost:3000
+```
 
-When a **person** is detected, the app runs MediaPipe Gesture Recognizer and announces gestures such as:
+> গুরুত্বপূর্ণ: HTTPS বা localhost এর মাধ্যমে চালালে ক্যামেরা অনুমতি এবং speech APIs আরও ভালোভাবে কাজ করে।
 
-| Gesture | Bengali |
+### 2. কনফিগারেশন ফাইল তৈরি করুন
+
+যদি আপনি config ব্যবহার করতে চান, তাহলে:
+
+```bash
+cp config.example.js config.js
+```
+
+তারপর প্রয়োজন অনুযায়ী সামঞ্জস্য করুন।
+
+## ব্যবহার পদ্ধতি
+
+1. পৃষ্ঠার উপর “ক্যামেরা চালু করুন” বোতামে ক্লিক করুন
+2. ব্রাউজার ক্যামেরা অনুমতি দিন
+3. অ্যাপটি আপনার সামনে থাকা বস্তু ও মানুষের হাতের ইশারা শনাক্ত করতে শুরু করবে
+4. “এখনই বর্ণনা করুন” বা Space কী ব্যবহার করে বর্ণনা আবার চালাতে পারেন
+5. “কথা বন্ধ করুন” বোতামে ক্লিক করলে speech বন্ধ করা যাবে
+
+## সমর্থিত হাতের ইশারা
+
+ব্যক্তি শনাক্ত হলে নিম্নলিখিত হাতের ইশারা চেনা যায়:
+
+| Gesture | বাংলা |
 |---------|---------|
 | Open_Palm | খোলা হাত |
 | Closed_Fist | মুষ্ঠি |
-| Thumb_Up | সম্মতি |
-| Victory |বিজয় ইশারা |
+| Thumb_Up | থাম্বস আপ |
+| Victory | ভি (বিজয়) ইশারা |
 | Pointing_Up | উপরের দিকে আঙুল |
 | ILoveYou | আই লাভ ইউ ইশারা |
 
-## Bengali TTS note
+## টেক্সট-টু-স্পিচについて
 
-The browser picks a Bengali voice when available (`bn-BD`). Quality varies by OS/browser — Chrome on Windows may have limited Bengali voices. For production-quality TTS, consider Google Cloud or Azure Bengali voices via a small backend.
+এই অ্যাপে বাংলা বর্ণনা পড়ে শোনানোর জন্য browser speech API এবং Google TTS-এর মতো পদ্ধতি ব্যবহার করা হয়। তবে কিছু ব্রাউজারে বা ফোনে Bengali voice availability ভিন্ন হতে পারে।
+
+### সাধারণ নির্দেশনা
+
+- Chrome/Edge/Brave-এ speech API কিছু ক্ষেত্রে কাজ নাও করতে পারে
+- Android ফোনে বেশিরভাগ ক্ষেত্রে user interaction এর পর speech কাজ করে
+- টেক্সট-টু-স্পিচের কার্যকারিতা ব্রাউজার, OS, ভাষা voice availability ও ইন্টারনেট সংযোগের উপর নির্ভর করে
+
+## ডেপ্লয়মেন্ট
+
+### Netlify-এ deploy করা
+
+1. GitHub/GitLab-এ repository push করুন
+2. Netlify-এ “Add new site” নির্বাচন করুন
+3. Repository import করুন
+4. Build command খালি রাখুন
+5. Publish directory হিসেবে root folder বেছে নিন
+
+এই প্রজেক্টে [netlify.toml](netlify.toml) ফাইলে publish configuration already করা আছে।
+
+## নিরাপত্তা ও নীতি
+
+- ক্যামেরা ব্যবহার করতে browser permission লাগে
+- microphone এর অনুমতি দেওয়া হয় না; কেবল camera ব্যবহৃত হয়
+- app static HTML/JS ভিত্তিক হওয়ায় backend দরকার নেই
+- OAuth বা server-side auth প্রয়োজন হয় না
+
+## সমস্যা সমাধান
+
+### ক্যামেরা কাজ করছে না
+- ব্রাউজারে site access allow করুন
+- HTTPS বা localhost ব্যবহার করুন
+- অন্য ব্রাউজারে চেষ্টা করুন
+- অন্য কোনো app বা tab ক্যামেরা ব্যবহার করছে কিনা দেখুন
+
+### বাংলা বর্ণনা দেখা যাচ্ছে, কিন্তু শব্দ হচ্ছে না
+- পেজে একবার ক্লিক/ট্যাপ করুন
+- ব্রাউজার refresh করুন
+- Speech mode পরিবর্তন করুন
+- কোনো browser policy বা OS restriction আছে কিনা দেখুন
+
+### ত্রুটি দেখাচ্ছে
+- Browser console খুলে error message দেখুন
+- internet connection পরীক্ষা করুন
+- অ্যাপ রিলোড করুন
+
+## ভবিষ্যৎ উন্নয়ন পরিকল্পনা
+
+- আরও বেশি ভাষার সমর্থন
+- আরও নির্ভুল object recognition
+- offline speech synthesis support
+- customizable voice selection
+- multi-language UI
+- better gesture descriptions
+- cloud-based TTS for higher quality Bengali voices
+
+## কৃতজ্ঞতা
+
+এই প্রজেক্টটি accessibility, computer vision, browser-based AI এবং assistive technology-এর মিলনে তৈরি।

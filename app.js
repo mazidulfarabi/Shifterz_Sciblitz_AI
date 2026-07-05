@@ -875,8 +875,8 @@ async function startApp() {
         stopBtn.hidden = false;
         scanBtn.hidden = false;
         setStatus("প্রস্তুত। ক্যামেরা আপনার চারপাশের দিকে ধরুন।");
-        setAnnouncement("দৃশ্য সহায়ক চালু হয়েছে।");
-        speak("দৃশ্য সহায়ক চালু হয়েছে। আমি আপনার চারপাশের বস্তু এবং হাতের ইশারা বর্ণনা করব।");
+        setAnnouncement("দৃষ্টি সহায়ক চালু হয়েছে।");
+        speak("দৃষ্টি সহায়ক চালু হয়েছে। আমি আপনার চারপাশের বস্তু এবং হাতের ইশারা বর্ণনা করব।");
         predictWebcam();
     } catch (err) {
         console.error(err);
