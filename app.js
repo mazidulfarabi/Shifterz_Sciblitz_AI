@@ -178,10 +178,12 @@ function depthLabel(depth) {
     return labels[depth] || depth;
 }
 
-function spatialPosition(bbox) {
-    const centerX = bbox.originX + bbox.width / 2;
-    const centerY = bbox.originY + bbox.height / 2;
-    const area = bbox.width * bbox.height;
+function spatialPosition(bbox, frameWidth, frameHeight) {
+    const fw = frameWidth || 1;
+    const fh = frameHeight || 1;
+    const centerX = (bbox.originX + bbox.width / 2) / fw;
+    const centerY = (bbox.originY + bbox.height / 2) / fh;
+    const area = (bbox.width * bbox.height) / (fw * fh);
 
     return {
         horizontal: horizontalZone(centerX),
@@ -194,6 +196,9 @@ function spatialPosition(bbox) {
 }
 
 function normalizeDetections(detections) {
+    const fw = video.videoWidth || 1;
+    const fh = video.videoHeight || 1;
+
     return detections
         .map((detection) => {
             const category = detection.categories?.[0];
@@ -202,7 +207,7 @@ function normalizeDetections(detections) {
             }
 
             const bbox = detection.boundingBox;
-            const position = spatialPosition(bbox);
+            const position = spatialPosition(bbox, fw, fh);
 
             return {
                 label: category.categoryName,
@@ -210,10 +215,10 @@ function normalizeDetections(detections) {
                 confidence: Number(category.score.toFixed(3)),
                 position,
                 bbox: {
-                    x: Number(bbox.originX.toFixed(3)),
-                    y: Number(bbox.originY.toFixed(3)),
-                    width: Number(bbox.width.toFixed(3)),
-                    height: Number(bbox.height.toFixed(3))
+                    x: Number((bbox.originX / fw).toFixed(3)),
+                    y: Number((bbox.originY / fh).toFixed(3)),
+                    width: Number((bbox.width / fw).toFixed(3)),
+                    height: Number((bbox.height / fh).toFixed(3))
                 }
             };
         })
