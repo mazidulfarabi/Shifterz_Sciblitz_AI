@@ -355,6 +355,7 @@ async function startApp() {
         await startCamera();
         running = true;
         startBtn.style.display = "none";
+        clearBtn.disabled = false;
         setStatus("Camera ready. Hold an ASL letter steady to build words.");
         setDetectedLetter("-");
         renderTranscript();

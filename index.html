@@ -2,248 +2,320 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-                            }
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ASL Word Builder</title>
+    <style>
+        :root {
+            color-scheme: dark;
+            --bg: #07111d;
+            --bg-2: #0c1726;
+            --panel: rgba(8, 16, 28, 0.84);
+            --panel-border: rgba(255, 255, 255, 0.08);
+            --text: #f8fafc;
+            --muted: #b8c2d6;
+            --accent: #67e8f9;
+            --accent-strong: #38bdf8;
+            --warn: #fb7185;
+            --gold: #fbbf24;
+        }
 
-                            .subtitle {
-                                margin: 0;
-                                color: var(--muted);
-                                max-width: 68ch;
-                                line-height: 1.6;
-                                font-size: 1rem;
-                            }
+        * {
+            box-sizing: border-box;
+        }
 
-                            .badges {
-                                display: flex;
-                                flex-wrap: wrap;
-                                gap: 10px;
-                                margin-top: 18px;
-                            }
+        body {
+            margin: 0;
+            min-height: 100vh;
+            font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+            color: var(--text);
+            background:
+                radial-gradient(circle at top left, rgba(56, 189, 248, 0.18), transparent 28%),
+                radial-gradient(circle at top right, rgba(251, 191, 36, 0.14), transparent 24%),
+                linear-gradient(160deg, var(--bg), var(--bg-2));
+            padding: 24px;
+        }
 
-                            .badge {
-                                padding: 8px 12px;
-                                border-radius: 999px;
-                                border: 1px solid rgba(255, 255, 255, 0.08);
-                                background: rgba(255, 255, 255, 0.04);
-                                color: var(--text);
-                                font-size: 0.85rem;
-                            }
+        .shell {
+            max-width: 1240px;
+            margin: 0 auto;
+            display: grid;
+            gap: 18px;
+        }
 
-                            .panel {
-                                padding: 20px;
-                            }
+        .hero,
+        .layout {
+            display: grid;
+            grid-template-columns: minmax(0, 1.2fr) minmax(320px, 0.8fr);
+            gap: 18px;
+            align-items: start;
+        }
 
-                            .control-grid {
-                                display: grid;
-                                gap: 12px;
-                            }
+        .title-block,
+        .panel {
+            border-radius: 28px;
+            border: 1px solid var(--panel-border);
+            background: var(--panel);
+            box-shadow: 0 22px 80px rgba(0, 0, 0, 0.28);
+            backdrop-filter: blur(18px);
+        }
 
-                            label {
-                                display: grid;
-                                gap: 8px;
-                                color: var(--muted);
-                                font-size: 0.92rem;
-                            }
+        .title-block {
+            padding: 28px;
+            position: relative;
+            overflow: hidden;
+        }
 
-                            input {
-                                width: 100%;
-                                border-radius: 14px;
-                                border: 1px solid rgba(255, 255, 255, 0.12);
-                                background: rgba(5, 10, 16, 0.78);
-                                color: var(--text);
-                                padding: 14px 16px;
-                                font-size: 1rem;
-                                outline: none;
-                            }
+        .title-block::after {
+            content: "";
+            position: absolute;
+            inset: auto -80px -120px auto;
+            width: 280px;
+            height: 280px;
+            border-radius: 50%;
+            background: radial-gradient(circle, rgba(103, 232, 249, 0.24), transparent 68%);
+            pointer-events: none;
+        }
 
-                            input:focus {
-                                border-color: rgba(56, 189, 248, 0.7);
-                                box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.14);
-                            }
+        h1 {
+            margin: 0;
+            font-size: clamp(2rem, 4vw, 3.7rem);
+            line-height: 0.98;
+            letter-spacing: -0.04em;
+        }
 
-                            .button-row {
-                                display: flex;
-                                flex-wrap: wrap;
-                                gap: 10px;
-                            }
+        .subtitle {
+            margin: 16px 0 0;
+            color: var(--muted);
+            max-width: 68ch;
+            line-height: 1.6;
+            font-size: 1rem;
+        }
 
-                            button {
-                                appearance: none;
-                                border: 0;
-                                border-radius: 14px;
-                                padding: 12px 18px;
-                                font-size: 0.98rem;
-                                font-weight: 700;
-                                cursor: pointer;
-                            }
+        .badges {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-top: 18px;
+        }
 
-                            #start-btn {
-                                color: #111827;
-                                background: linear-gradient(135deg, #fbbf24, #fb7185);
-                            }
+        .badge {
+            padding: 8px 12px;
+            border-radius: 999px;
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            background: rgba(255, 255, 255, 0.04);
+            color: var(--text);
+            font-size: 0.85rem;
+        }
 
-                            #save-key-btn {
-                                color: #081018;
-                                background: linear-gradient(135deg, #67e8f9, #38bdf8);
-                            }
+        .panel {
+            padding: 20px;
+        }
 
-                            #clear-btn {
-                                color: var(--text);
-                                background: rgba(255, 255, 255, 0.08);
-                                border: 1px solid rgba(255, 255, 255, 0.12);
-                            }
+        .control-grid {
+            display: grid;
+            gap: 12px;
+        }
 
-                            button:disabled {
-                                opacity: 0.5;
-                                cursor: not-allowed;
-                            }
+        label {
+            display: grid;
+            gap: 8px;
+            color: var(--muted);
+            font-size: 0.92rem;
+        }
 
-                            .layout {
-                                display: grid;
-                                grid-template-columns: minmax(0, 1.2fr) minmax(320px, 0.8fr);
-                                gap: 18px;
-                                align-items: start;
-                            }
+        input {
+            width: 100%;
+            border-radius: 14px;
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            background: rgba(5, 10, 16, 0.78);
+            color: var(--text);
+            padding: 14px 16px;
+            font-size: 1rem;
+            outline: none;
+        }
 
-                            .video-container {
-                                position: relative;
-                                width: 100%;
-                                aspect-ratio: 4 / 3;
-                                border-radius: 28px;
-                                overflow: hidden;
-                                background: #02060b;
-                                border: 1px solid rgba(255, 255, 255, 0.08);
-                                box-shadow: 0 24px 80px rgba(0, 0, 0, 0.32);
-                            }
+        input:focus {
+            border-color: rgba(56, 189, 248, 0.7);
+            box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.14);
+        }
 
-                            video,
-                            canvas {
-                                position: absolute;
-                                inset: 0;
-                                width: 100%;
-                                height: 100%;
-                                transform: scaleX(-1);
-                            }
+        .button-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
 
-                            .hud {
-                                display: grid;
-                                gap: 12px;
-                                grid-template-columns: repeat(3, minmax(0, 1fr));
-                            }
+        button {
+            appearance: none;
+            border: 0;
+            border-radius: 14px;
+            padding: 12px 18px;
+            font-size: 0.98rem;
+            font-weight: 700;
+            cursor: pointer;
+        }
 
-                            .card {
-                                padding: 16px;
-                                border-radius: 20px;
-                                background: rgba(255, 255, 255, 0.04);
-                                border: 1px solid rgba(255, 255, 255, 0.08);
-                            }
+        #start-btn {
+            color: #111827;
+            background: linear-gradient(135deg, var(--gold), var(--warn));
+        }
 
-                            .card span {
-                                display: block;
-                                color: var(--muted);
-                                font-size: 0.8rem;
-                                margin-bottom: 6px;
-                                text-transform: uppercase;
-                                letter-spacing: 0.08em;
-                            }
+        #save-key-btn {
+            color: #081018;
+            background: linear-gradient(135deg, var(--accent), var(--accent-strong));
+        }
 
-                            .card strong {
-                                font-size: 1.2rem;
-                                line-height: 1.35;
-                                word-break: break-word;
-                            }
+        #clear-btn {
+            color: var(--text);
+            background: rgba(255, 255, 255, 0.08);
+            border: 1px solid rgba(255, 255, 255, 0.12);
+        }
 
-                            .status {
-                                margin-top: 14px;
-                                color: var(--text);
-                                line-height: 1.6;
-                                min-height: 28px;
-                            }
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
 
-                            .helper {
-                                margin-top: 10px;
-                                color: var(--muted);
-                                font-size: 0.95rem;
-                                line-height: 1.5;
-                            }
+        .video-container {
+            position: relative;
+            width: 100%;
+            aspect-ratio: 4 / 3;
+            border-radius: 28px;
+            overflow: hidden;
+            background: #02060b;
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            box-shadow: 0 24px 80px rgba(0, 0, 0, 0.32);
+        }
 
-                            @media (max-width: 980px) {
-                                .hero,
-                                .layout {
-                                    grid-template-columns: 1fr;
-                                }
-                            }
+        video,
+        canvas {
+            position: absolute;
+            inset: 0;
+            width: 100%;
+            height: 100%;
+            transform: scaleX(-1);
+        }
 
-                            @media (max-width: 640px) {
-                                body {
-                                    padding: 14px;
-                                }
+        .hud {
+            display: grid;
+            gap: 12px;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+        }
 
-                                .title-block,
-                                .panel {
-                                    border-radius: 20px;
-                                }
+        .card {
+            padding: 16px;
+            border-radius: 20px;
+            background: rgba(255, 255, 255, 0.04);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+        }
 
-                                .hud {
-                                    grid-template-columns: 1fr;
-                                }
-                            }
-                        </style>
-                    </head>
-                    <body>
-                        <div class="shell">
-                            <div class="hero">
-                                <div class="title-block">
-                                    <h1>ASL Word Builder</h1>
-                                    <p class="subtitle">
-                                        This uses a Roboflow ASL letter model and turns stable letter predictions into words.
-                                        Hold a sign steady, let the app confirm the letter, and pause between words to commit them.
-                                    </p>
-                                    <div class="badges">
-                                        <div class="badge">Roboflow model-backed</div>
-                                        <div class="badge">Letters to words</div>
-                                        <div class="badge">Works in-browser</div>
-                                    </div>
-                                </div>
-                                <div class="panel control-grid">
-                                    <label for="api-key">
-                                        Roboflow API Key
-                                        <input id="api-key" type="password" autocomplete="off" placeholder="Paste your Roboflow API key" />
-                                    </label>
-                                    <div class="button-row">
-                                        <button id="save-key-btn" type="button">Save Key</button>
-                                        <button id="start-btn" type="button">Start Camera</button>
-                                        <button id="clear-btn" type="button">Clear Text</button>
-                                    </div>
-                                    <div id="output" class="status">Add your Roboflow API key, save it, then start the camera.</div>
-                                    <div id="api-hint" class="helper">Model: asl_to_text-tumuk/1. This app sends frames to Roboflow for inference and builds words from the detected letters.</div>
-                                </div>
-                            </div>
+        .card span {
+            display: block;
+            color: var(--muted);
+            font-size: 0.8rem;
+            margin-bottom: 6px;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+        }
 
-                            <div class="layout">
-                                <div class="video-container">
-                                    <video id="webcam" autoplay playsinline muted></video>
-                                    <canvas id="output_canvas"></canvas>
-                                </div>
+        .card strong {
+            font-size: 1.2rem;
+            line-height: 1.35;
+            word-break: break-word;
+        }
 
-                                <div class="panel">
-                                    <div class="hud">
-                                        <div class="card">
-                                            <span>Detected Letter</span>
-                                            <strong id="detected-letter">-</strong>
-                                        </div>
-                                        <div class="card">
-                                            <span>Current Word</span>
-                                            <strong id="current-word">-</strong>
-                                        </div>
-                                        <div class="card">
-                                            <span>Sentence</span>
-                                            <strong id="sentence">-</strong>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
+        .status {
+            margin-top: 14px;
+            color: var(--text);
+            line-height: 1.6;
+            min-height: 28px;
+        }
 
-                        <script src="app.js" type="module"></script>
-                    </body>
-                    </html>
+        .helper {
+            margin-top: 10px;
+            color: var(--muted);
+            font-size: 0.95rem;
+            line-height: 1.5;
+        }
+
+        @media (max-width: 980px) {
+            .hero,
+            .layout {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        @media (max-width: 640px) {
+            body {
+                padding: 14px;
+            }
+
+            .title-block,
+            .panel {
+                border-radius: 20px;
+            }
+
+            .hud {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="shell">
+        <div class="hero">
+            <div class="title-block">
+                <h1>ASL Word Builder</h1>
+                <p class="subtitle">
+                    This uses a Roboflow ASL letter model and turns stable letter predictions into words.
+                    Hold a sign steady, let the app confirm the letter, and pause between words to commit them.
+                </p>
+                <div class="badges">
+                    <div class="badge">Roboflow model-backed</div>
+                    <div class="badge">Letters to words</div>
+                    <div class="badge">Works in-browser</div>
+                </div>
+            </div>
+            <div class="panel control-grid">
+                <label for="api-key">
+                    Roboflow API Key
+                    <input id="api-key" type="password" autocomplete="off" placeholder="Paste your Roboflow API key" />
+                </label>
+                <div class="button-row">
+                    <button id="save-key-btn" type="button">Save Key</button>
+                    <button id="start-btn" type="button">Start Camera</button>
+                    <button id="clear-btn" type="button">Clear Text</button>
+                </div>
+                <div id="output" class="status">Add your Roboflow API key, save it, then start the camera.</div>
+                <div id="api-hint" class="helper">Model: asl_to_text-tumuk/1. This app sends frames to Roboflow for inference and builds words from the detected letters.</div>
+            </div>
+        </div>
+
+        <div class="layout">
+            <div class="video-container">
+                <video id="webcam" autoplay playsinline muted></video>
+                <canvas id="output_canvas"></canvas>
+            </div>
+
+            <div class="panel">
+                <div class="hud">
+                    <div class="card">
+                        <span>Detected Letter</span>
+                        <strong id="detected-letter">-</strong>
+                    </div>
+                    <div class="card">
+                        <span>Current Word</span>
+                        <strong id="current-word">-</strong>
+                    </div>
+                    <div class="card">
+                        <span>Sentence</span>
+                        <strong id="sentence">-</strong>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="app.js" type="module"></script>
+</body>
+</html>
