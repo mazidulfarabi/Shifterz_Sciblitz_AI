@@ -1,8 +1,9 @@
 <!DOCTYPE html>
-<html lang="bn">
+<html lang="bn" translate="no">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="google" content="notranslate">
     <title>দৃশ্য সহায়ক</title>
     <meta name="description" content="অন্ধ ও দৃষ্টিপ্রতিবন্ধী ব্যবহারকারীদের জন্য বাস্তব সময়ে বস্তু ও হাতের ইশারা শনাক্ত করে বাংলায় বর্ণনা।">
     <link rel="icon" href="data:,">
@@ -163,7 +164,8 @@
             color: var(--muted);
         }
 
-        #settings-panel input[type="number"] {
+        #settings-panel input[type="number"],
+        #settings-panel select {
             width: 100%;
             margin-top: 6px;
             padding: 10px 12px;
@@ -213,7 +215,7 @@
 
         <section class="panel" aria-labelledby="announcement-heading">
             <h2 id="announcement-heading">বর্তমান বর্ণনা</h2>
-            <div id="announcement" role="status" aria-live="assertive" aria-atomic="true">
+            <div id="announcement" role="status" aria-live="assertive" aria-atomic="true" translate="no">
                 শুরু করতে ক্যামেরা চালু করুন চাপুন।
             </div>
             <p id="status" aria-live="polite"></p>
@@ -249,6 +251,14 @@
                 <label for="speech-rate">
                     কথার গতি (০.৫ – ২)
                     <input id="speech-rate" type="number" min="0.5" max="2" step="0.1" value="1">
+                </label>
+                <label for="tts-mode">
+                    কথা বলার পদ্ধতি
+                    <select id="tts-mode">
+                        <option value="google" selected>Google (বাংলা — Android/PC-তে নির্ভরযোগ্য)</option>
+                        <option value="auto">স্বয়ংক্রিয় (ব্রাউজার, তারপর Google)</option>
+                        <option value="browser">শুধু ব্রাউজার</option>
+                    </select>
                 </label>
                 <button id="save-settings" class="btn-primary" type="button">সেটিংস সংরক্ষণ</button>
                 <p class="help">

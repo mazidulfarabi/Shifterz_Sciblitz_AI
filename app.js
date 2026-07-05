@@ -6,6 +6,7 @@ import {
 
 const STORAGE_KEY_INTERVAL = "spatialVision.intervalSec";
 const STORAGE_KEY_SPEECH_RATE = "spatialVision.speechRate";
+const STORAGE_KEY_TTS_MODE = "spatialVision.ttsMode";
 
 const DEFAULT_INTERVAL_SEC = 4;
 const SCORE_THRESHOLD = 0.45;
@@ -13,6 +14,12 @@ const MAX_OBJECTS = 8;
 const GESTURE_SCORE_THRESHOLD = 0.6;
 const GESTURE_FRAME_SKIP = 2;
 const SPEECH_LANG = "bn-BD";
+const GOOGLE_TTS_LANG = "bn";
+const TTS_MODES = {
+    AUTO: "auto",
+    BROWSER: "browser",
+    GOOGLE: "google"
+};
 
 const OBJECT_NAMES_BN = {
     person: "একজন ব্যক্তি",
@@ -101,6 +108,7 @@ const settingsToggle = document.getElementById("settings-toggle");
 const settingsPanel = document.getElementById("settings-panel");
 const intervalInput = document.getElementById("interval-sec");
 const speechRateInput = document.getElementById("speech-rate");
+const ttsModeInput = document.getElementById("tts-mode");
 const saveSettingsBtn = document.getElementById("save-settings");
 const statusRegion = document.getElementById("status");
 const announcementRegion = document.getElementById("announcement");
@@ -120,21 +128,168 @@ let cameraStream = null;
 let gestureFrameCounter = 0;
 let lastGestures = [];
 let bnVoice = null;
+let speakGeneration = 0;
+let currentAudio = null;
+let speechPrimed = false;
 
 let runtimeConfig = {
     intervalSec: DEFAULT_INTERVAL_SEC,
-    speechRate: 1
+    speechRate: 1,
+    ttsMode: TTS_MODES.GOOGLE
 };
 
-function initSpeech() {
-    const pickVoice = () => {
-        const voices = window.speechSynthesis?.getVoices() || [];
-        bnVoice = voices.find((voice) => voice.lang.startsWith("bn")) || null;
-    };
+function refreshBnVoice() {
+    const voices = window.speechSynthesis?.getVoices() || [];
+    bnVoice =
+        voices.find((voice) => voice.lang === "bn-BD") ||
+        voices.find((voice) => voice.lang === "bn-IN") ||
+        voices.find((voice) => voice.lang.startsWith("bn")) ||
+        null;
+}
 
-    pickVoice();
+function initSpeech() {
+    refreshBnVoice();
     if (window.speechSynthesis) {
-        window.speechSynthesis.onvoiceschanged = pickVoice;
+        window.speechSynthesis.onvoiceschanged = refreshBnVoice;
+    }
+}
+
+function primeSpeech() {
+    if (speechPrimed || !window.speechSynthesis) {
+        return;
+    }
+
+    speechPrimed = true;
+    refreshBnVoice();
+    window.speechSynthesis.resume();
+
+    const warmup = new SpeechSynthesisUtterance("");
+    warmup.volume = 0;
+    warmup.lang = SPEECH_LANG;
+    window.speechSynthesis.speak(warmup);
+}
+
+function stopSpeaking() {
+    speakGeneration += 1;
+    window.speechSynthesis?.cancel();
+    if (currentAudio) {
+        currentAudio.pause();
+        currentAudio.src = "";
+        currentAudio = null;
+    }
+}
+
+function splitSpeechChunks(text, maxLength = 180) {
+    const chunks = [];
+    const sentences = text.match(/[^।.!?]+[।.!?]?/g) || [text];
+    let current = "";
+
+    for (const sentence of sentences) {
+        const trimmed = sentence.trim();
+        if (!trimmed) {
+            continue;
+        }
+
+        if ((current + trimmed).length <= maxLength) {
+            current += trimmed;
+            continue;
+        }
+
+        if (current) {
+            chunks.push(current.trim());
+        }
+
+        if (trimmed.length <= maxLength) {
+            current = trimmed;
+        } else {
+            for (let index = 0; index < trimmed.length; index += maxLength) {
+                chunks.push(trimmed.slice(index, index + maxLength));
+            }
+            current = "";
+        }
+    }
+
+    if (current.trim()) {
+        chunks.push(current.trim());
+    }
+
+    return chunks.length > 0 ? chunks : [text];
+}
+
+function speakWithBrowser(text) {
+    return new Promise((resolve) => {
+        refreshBnVoice();
+        window.speechSynthesis.resume();
+
+        const utterance = new SpeechSynthesisUtterance(text);
+        utterance.lang = SPEECH_LANG;
+        utterance.rate = runtimeConfig.speechRate;
+        utterance.pitch = 1;
+        utterance.volume = 1;
+
+        if (bnVoice) {
+            utterance.voice = bnVoice;
+        }
+
+        utterance.onend = () => resolve(true);
+        utterance.onerror = () => resolve(false);
+        window.speechSynthesis.speak(utterance);
+    });
+}
+
+function playGoogleTtsChunk(text) {
+    const url = `https://translate.googleapis.com/translate_tts?ie=UTF-8&client=gtx&tl=${GOOGLE_TTS_LANG}&q=${encodeURIComponent(text)}`;
+
+    return new Promise((resolve, reject) => {
+        const audio = new Audio(url);
+        audio.playbackRate = runtimeConfig.speechRate;
+        currentAudio = audio;
+        audio.onended = () => resolve();
+        audio.onerror = () => reject(new Error("Google TTS playback failed"));
+        audio.play().catch(reject);
+    });
+}
+
+async function speakWithGoogle(text, generation) {
+    const chunks = splitSpeechChunks(text);
+
+    for (const chunk of chunks) {
+        if (generation !== speakGeneration) {
+            return;
+        }
+
+        await playGoogleTtsChunk(chunk);
+    }
+}
+
+async function speak(text) {
+    if (muted || !text) {
+        return;
+    }
+
+    stopSpeaking();
+    const generation = speakGeneration;
+    refreshBnVoice();
+
+    const mode = runtimeConfig.ttsMode;
+    const shouldTryBrowser =
+        mode === TTS_MODES.BROWSER || (mode === TTS_MODES.AUTO && bnVoice);
+
+    if (shouldTryBrowser) {
+        const browserWorked = await speakWithBrowser(text);
+        if (browserWorked && generation === speakGeneration) {
+            return;
+        }
+    }
+
+    if (mode === TTS_MODES.BROWSER) {
+        return;
+    }
+
+    try {
+        await speakWithGoogle(text, generation);
+    } catch (err) {
+        console.warn("Bengali TTS failed:", err);
     }
 }
 
@@ -147,12 +302,16 @@ async function loadRuntimeConfig() {
     }
 
     runtimeConfig.speechRate = Number(localStorage.getItem(STORAGE_KEY_SPEECH_RATE)) || 1;
+    runtimeConfig.ttsMode = localStorage.getItem(STORAGE_KEY_TTS_MODE) || TTS_MODES.GOOGLE;
     syncSettingsForm();
 }
 
 function syncSettingsForm() {
     intervalInput.value = String(runtimeConfig.intervalSec);
     speechRateInput.value = String(runtimeConfig.speechRate);
+    if (ttsModeInput) {
+        ttsModeInput.value = runtimeConfig.ttsMode;
+    }
 }
 
 function setStatus(message) {
@@ -247,6 +406,7 @@ async function startCamera() {
 
 function stopCamera() {
     running = false;
+    stopSpeaking();
     if (cameraStream) {
         cameraStream.getTracks().forEach((track) => track.stop());
         cameraStream = null;
@@ -285,7 +445,27 @@ function horizontalLabel(horizontal) {
 
 function objectNameBn(obj) {
     const key = obj.label.toLowerCase();
-    return OBJECT_NAMES_BN[key] || OBJECT_NAMES_BN[obj.display_name.toLowerCase()] || `একটি ${obj.display_name.replace(/_/g, " ")}`;
+    if (OBJECT_NAMES_BN[key]) {
+        return OBJECT_NAMES_BN[key];
+    }
+
+    const displayKey = obj.display_name.toLowerCase().replace(/_/g, " ");
+    if (OBJECT_NAMES_BN[displayKey]) {
+        return OBJECT_NAMES_BN[displayKey];
+    }
+
+    return "একটি বস্তু";
+}
+
+function handLabelFromHandedness(handednessCategory) {
+    const name = handednessCategory?.categoryName;
+    if (name === "Left") {
+        return "বাম হাত";
+    }
+    if (name === "Right") {
+        return "ডান হাত";
+    }
+    return "হাত";
 }
 
 function spatialPosition(bbox, frameWidth, frameHeight) {
@@ -362,11 +542,12 @@ function detectGestures() {
         const landmarks = results.landmarks?.[handIndex];
         const wrist = landmarks?.[0];
         const centerX = wrist ? wrist.x : 0.5;
+        const handednessCategory = results.handedness?.[handIndex]?.[0];
 
         gestures.push({
-            hand: handIndex === 0 ? "ডান হাত" : "বাম হাত",
+            hand: handLabelFromHandedness(handednessCategory),
             gesture: topGesture.categoryName,
-            gesture_bn: GESTURE_NAMES_BN[topGesture.categoryName] || topGesture.displayName || topGesture.categoryName,
+            gesture_bn: GESTURE_NAMES_BN[topGesture.categoryName] || "অজানা ইশারা",
             confidence: Number(topGesture.score.toFixed(3)),
             horizontal: horizontalZone(centerX)
         });
@@ -425,25 +606,6 @@ function buildSpatialSentence(objects, gestures) {
     }
 
     return `${parts.join(". ")}।`;
-}
-
-function speak(text) {
-    if (muted || !text || !window.speechSynthesis) {
-        return;
-    }
-
-    window.speechSynthesis.cancel();
-    const utterance = new SpeechSynthesisUtterance(text);
-    utterance.lang = SPEECH_LANG;
-    utterance.rate = runtimeConfig.speechRate;
-    utterance.pitch = 1;
-    utterance.volume = 1;
-
-    if (bnVoice) {
-        utterance.voice = bnVoice;
-    }
-
-    window.speechSynthesis.speak(utterance);
 }
 
 function renderObjectList(objects) {
@@ -610,6 +772,7 @@ async function startApp() {
     }
 
     startBtn.disabled = true;
+    primeSpeech();
 
     try {
         await startCamera();
@@ -642,9 +805,11 @@ async function startApp() {
 function saveSettings() {
     runtimeConfig.intervalSec = Math.max(2, Number(intervalInput.value) || DEFAULT_INTERVAL_SEC);
     runtimeConfig.speechRate = Math.min(2, Math.max(0.5, Number(speechRateInput.value) || 1));
+    runtimeConfig.ttsMode = ttsModeInput?.value || TTS_MODES.GOOGLE;
 
     localStorage.setItem(STORAGE_KEY_INTERVAL, String(runtimeConfig.intervalSec));
     localStorage.setItem(STORAGE_KEY_SPEECH_RATE, String(runtimeConfig.speechRate));
+    localStorage.setItem(STORAGE_KEY_TTS_MODE, runtimeConfig.ttsMode);
 
     setStatus("সেটিংস সংরক্ষিত।");
     speak("সেটিংস সংরক্ষিত।");
@@ -670,7 +835,7 @@ muteBtn.addEventListener("click", () => {
     muteBtn.setAttribute("aria-pressed", String(muted));
     muteBtn.textContent = muted ? "কথা চালু করুন" : "কথা বন্ধ করুন";
     if (muted) {
-        window.speechSynthesis?.cancel();
+        stopSpeaking();
     }
 });
 
