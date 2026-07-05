@@ -5,6 +5,8 @@ import {
 } from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.8/vision_bundle.mjs";
 
 const STORAGE_KEY_INTERVAL = "spatialVision.intervalSec";
+const STORAGE_KEY_SPEECH_RATE = "spatialVision.speechRate";
+const STORAGE_KEY_TTS_MODE = "spatialVision.ttsMode";
 
 const DEFAULT_INTERVAL_SEC = 4;
 const SCORE_THRESHOLD = 0.45;
@@ -126,7 +128,9 @@ let speechPrimed = false;
 let speechUserActivated = false;
 
 let runtimeConfig = {
-    intervalSec: DEFAULT_INTERVAL_SEC
+    intervalSec: DEFAULT_INTERVAL_SEC,
+    speechRate: 1,
+    ttsMode: TTS_MODES.GOOGLE
 };
 
 function refreshBnVoice() {
@@ -157,7 +161,7 @@ function registerSpeechActivationHandlers() {
 }
 
 async function ensureSpeechReady() {
-    if (!isMobileDevice() || speechUserActivated || !window.speechSynthesis) {
+    if (speechUserActivated || !window.speechSynthesis) {
         return;
     }
 
@@ -178,16 +182,8 @@ async function ensureSpeechReady() {
     window.speechSynthesis?.resume();
 }
 
-function isMobileDevice() {
-    return /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent) || (navigator.maxTouchPoints > 0 && window.innerWidth < 1024);
-}
-
 function initSpeech() {
     refreshBnVoice();
-    if (!isMobileDevice()) {
-        return;
-    }
-
     registerSpeechActivationHandlers();
     if (window.speechSynthesis) {
         window.speechSynthesis.onvoiceschanged = refreshBnVoice;
@@ -195,7 +191,7 @@ function initSpeech() {
 }
 
 function primeSpeech() {
-    if (speechPrimed || !isMobileDevice() || !window.speechSynthesis) {
+    if (speechPrimed || !window.speechSynthesis) {
         return;
     }
 
@@ -361,7 +357,7 @@ async function speakWithGoogle(text, generation) {
 }
 
 async function speak(text) {
-    if (muted || !text || !isMobileDevice()) {
+    if (muted || !text) {
         return;
     }
 
@@ -399,9 +395,13 @@ async function loadRuntimeConfig() {
         runtimeConfig.intervalSec = Number(localStorage.getItem(STORAGE_KEY_INTERVAL)) || DEFAULT_INTERVAL_SEC;
     }
 
-    if (localStorage.getItem(STORAGE_KEY_INTERVAL)) {
-        runtimeConfig.intervalSec = Number(localStorage.getItem(STORAGE_KEY_INTERVAL)) || DEFAULT_INTERVAL_SEC;
-    }
+    runtimeConfig.speechRate = Number(localStorage.getItem(STORAGE_KEY_SPEECH_RATE)) || 1;
+    runtimeConfig.ttsMode = localStorage.getItem(STORAGE_KEY_TTS_MODE) || TTS_MODES.GOOGLE;
+    syncSettingsForm();
+}
+
+function syncSettingsForm() {
+    return;
 }
 
 function setStatus(message) {
