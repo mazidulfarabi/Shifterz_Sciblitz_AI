@@ -1,6 +1,6 @@
-# দৃষ্টি সহায়ক (Dristi Sohayok)
+# Dekho-AI
 
-দৃষ্টি সহায়ক is an AI-powered, browser-based assistive application designed for blind and visually impaired users. It uses a camera to detect nearby objects, understand their spatial position, recognize hand gestures when a person is present, and speak a simple Bengali description aloud. The app runs entirely in the browser, so there is no need to install a desktop application or backend service.
+Dekho is an AI-powered, browser-based assistive application designed for blind and visually impaired users. It uses a camera to detect nearby objects, understand their spatial position, recognize hand gestures when a person is present, and speak a simple Bengali description aloud. The app runs entirely in the browser, so there is no need to install a desktop application or backend service.
 
 ## Purpose
 
@@ -33,8 +33,9 @@ This makes the experience more accessible for users who need assistive technolog
 - Supported gestures include:
   - খোলা হাত (Open Palm)
   - মুষ্ঠি (Closed Fist)
-  - থাম্বস আপ (Thumb Up)
-  - ভি (বিজয়) ইশারা (Victory)
+  - সম্মতি (Thumbs Up)
+  - অসম্মতি (Thumbs Down)
+  - বিজয় ইশারা (Victory Sign)
   - উপরের দিকে আঙুল (Pointing Up)
   - আই লাভ ইউ ইশারা (I Love You)
 - These gestures are described in Bengali so the user can hear them clearly
@@ -130,8 +131,8 @@ When a person is detected, the app can recognize these gestures:
 |---------|---------------|
 | Open_Palm | খোলা হাত |
 | Closed_Fist | মুষ্ঠি |
-| Thumb_Up | থাম্বস আপ |
-| Victory | ভি (বিজয়) ইশারা |
+| Thumb_Up | সম্মতি |
+| Victory | ভি ইশারা |
 | Pointing_Up | উপরের দিকে আঙুল |
 | ILoveYou | আই লাভ ইউ ইশারা |
 
