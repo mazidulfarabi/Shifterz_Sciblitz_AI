@@ -131,6 +131,7 @@ let bnVoice = null;
 let speakGeneration = 0;
 let currentAudio = null;
 let speechPrimed = false;
+let speechUserActivated = false;
 
 let runtimeConfig = {
     intervalSec: DEFAULT_INTERVAL_SEC,
@@ -147,8 +148,46 @@ function refreshBnVoice() {
         null;
 }
 
+function markSpeechActivated() {
+    speechUserActivated = true;
+    window.speechSynthesis?.resume();
+}
+
+function registerSpeechActivationHandlers() {
+    const activateSpeech = () => {
+        markSpeechActivated();
+    };
+
+    ["pointerdown", "touchstart", "keydown", "click"].forEach((eventName) => {
+        document.addEventListener(eventName, activateSpeech, { passive: true });
+    });
+}
+
+async function ensureSpeechReady() {
+    if (speechUserActivated || !window.speechSynthesis) {
+        return;
+    }
+
+    await Promise.race([
+        new Promise((resolve) => {
+            const activateSpeech = () => {
+                markSpeechActivated();
+                resolve();
+            };
+
+            ["pointerdown", "touchstart", "keydown", "click"].forEach((eventName) => {
+                document.addEventListener(eventName, activateSpeech, { once: true, passive: true });
+            });
+        }),
+        new Promise((resolve) => setTimeout(resolve, 1200))
+    ]);
+
+    window.speechSynthesis?.resume();
+}
+
 function initSpeech() {
     refreshBnVoice();
+    registerSpeechActivationHandlers();
     if (window.speechSynthesis) {
         window.speechSynthesis.onvoiceschanged = refreshBnVoice;
     }
@@ -161,6 +200,7 @@ function primeSpeech() {
 
     speechPrimed = true;
     refreshBnVoice();
+    markSpeechActivated();
     window.speechSynthesis.resume();
 
     const warmup = new SpeechSynthesisUtterance("");
@@ -219,6 +259,7 @@ function splitSpeechChunks(text, maxLength = 180) {
 function speakWithBrowser(text) {
     return new Promise((resolve) => {
         refreshBnVoice();
+        markSpeechActivated();
         window.speechSynthesis.resume();
 
         const utterance = new SpeechSynthesisUtterance(text);
@@ -231,8 +272,15 @@ function speakWithBrowser(text) {
             utterance.voice = bnVoice;
         }
 
-        utterance.onend = () => resolve(true);
-        utterance.onerror = () => resolve(false);
+        const timeoutId = window.setTimeout(() => resolve(false), 4000);
+        utterance.onend = () => {
+            window.clearTimeout(timeoutId);
+            resolve(true);
+        };
+        utterance.onerror = () => {
+            window.clearTimeout(timeoutId);
+            resolve(false);
+        };
         window.speechSynthesis.speak(utterance);
     });
 }
@@ -242,11 +290,37 @@ function playGoogleTtsChunk(text) {
 
     return new Promise((resolve, reject) => {
         const audio = new Audio(url);
+        audio.preload = "auto";
         audio.playbackRate = runtimeConfig.speechRate;
         currentAudio = audio;
-        audio.onended = () => resolve();
-        audio.onerror = () => reject(new Error("Google TTS playback failed"));
-        audio.play().catch(reject);
+
+        const cleanup = () => {
+            if (currentAudio === audio) {
+                currentAudio = null;
+            }
+        };
+
+        const timeoutId = window.setTimeout(() => {
+            cleanup();
+            reject(new Error("Google TTS playback timed out"));
+        }, 8000);
+
+        audio.onended = () => {
+            window.clearTimeout(timeoutId);
+            cleanup();
+            resolve();
+        };
+        audio.onerror = () => {
+            window.clearTimeout(timeoutId);
+            cleanup();
+            reject(new Error("Google TTS playback failed"));
+        };
+
+        audio.play().catch((err) => {
+            window.clearTimeout(timeoutId);
+            cleanup();
+            reject(err);
+        });
     });
 }
 
@@ -267,13 +341,13 @@ async function speak(text) {
         return;
     }
 
+    await ensureSpeechReady();
     stopSpeaking();
     const generation = speakGeneration;
     refreshBnVoice();
 
     const mode = runtimeConfig.ttsMode;
-    const shouldTryBrowser =
-        mode === TTS_MODES.BROWSER || (mode === TTS_MODES.AUTO && bnVoice);
+    const shouldTryBrowser = Boolean(window.speechSynthesis) && (mode === TTS_MODES.BROWSER || mode === TTS_MODES.AUTO || mode === TTS_MODES.GOOGLE);
 
     if (shouldTryBrowser) {
         const browserWorked = await speakWithBrowser(text);
