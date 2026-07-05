@@ -1,4 +1,4 @@
-const MODEL_ID = "asl_to_text-tumuk/1";
+const MODEL_ID = "asl-m42ip-ac86g/1";
 const SERVERLESS_URL = "https://serverless.roboflow.com";
 const CAPTURE_SIZE = 416;
 const CONFIDENCE_THRESHOLD = 0.5;
@@ -165,7 +165,10 @@ async function startCamera() {
 }
 
 function captureFrameBase64() {
+    captureCtx.save();
+    captureCtx.setTransform(-1, 0, 0, 1, CAPTURE_SIZE, 0);
     captureCtx.drawImage(video, 0, 0, CAPTURE_SIZE, CAPTURE_SIZE);
+    captureCtx.restore();
     return captureCanvas.toDataURL("image/jpeg", 0.82).split(",")[1];
 }
 
