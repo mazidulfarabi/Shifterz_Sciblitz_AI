@@ -9,7 +9,7 @@ The main goal of this project is to help users understand their surroundings mor
 - what objects are present around the user
 - where those objects are located, such as left, center, right, near, or far
 - whether a person is detected and what hand gesture they are making
-- a clear Bengali spoken description that can be heard through the device speakers or headphones
+- a clear Bengali spoken description that can be heard through the device speakers or headphones (Mobile Phone Only as it is blind people aid)
 
 This makes the experience more accessible for users who need assistive technology in daily life, education, travel, or navigation.
 
