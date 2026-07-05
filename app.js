@@ -5,8 +5,6 @@ import {
 } from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.8/vision_bundle.mjs";
 
 const STORAGE_KEY_INTERVAL = "spatialVision.intervalSec";
-const STORAGE_KEY_SPEECH_RATE = "spatialVision.speechRate";
-const STORAGE_KEY_TTS_MODE = "spatialVision.ttsMode";
 
 const DEFAULT_INTERVAL_SEC = 4;
 const SCORE_THRESHOLD = 0.45;
@@ -104,12 +102,6 @@ const canvasCtx = canvasElement.getContext("2d");
 const startBtn = document.getElementById("start-btn");
 const stopBtn = document.getElementById("stop-btn");
 const scanBtn = document.getElementById("scan-btn");
-const settingsToggle = document.getElementById("settings-toggle");
-const settingsPanel = document.getElementById("settings-panel");
-const intervalInput = document.getElementById("interval-sec");
-const speechRateInput = document.getElementById("speech-rate");
-const ttsModeInput = document.getElementById("tts-mode");
-const saveSettingsBtn = document.getElementById("save-settings");
 const statusRegion = document.getElementById("status");
 const announcementRegion = document.getElementById("announcement");
 const objectList = document.getElementById("object-list");
@@ -134,9 +126,7 @@ let speechPrimed = false;
 let speechUserActivated = false;
 
 let runtimeConfig = {
-    intervalSec: DEFAULT_INTERVAL_SEC,
-    speechRate: 1,
-    ttsMode: TTS_MODES.GOOGLE
+    intervalSec: DEFAULT_INTERVAL_SEC
 };
 
 function refreshBnVoice() {
@@ -167,7 +157,7 @@ function registerSpeechActivationHandlers() {
 }
 
 async function ensureSpeechReady() {
-    if (speechUserActivated || !window.speechSynthesis) {
+    if (!isMobileDevice() || speechUserActivated || !window.speechSynthesis) {
         return;
     }
 
@@ -188,8 +178,16 @@ async function ensureSpeechReady() {
     window.speechSynthesis?.resume();
 }
 
+function isMobileDevice() {
+    return /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent) || (navigator.maxTouchPoints > 0 && window.innerWidth < 1024);
+}
+
 function initSpeech() {
     refreshBnVoice();
+    if (!isMobileDevice()) {
+        return;
+    }
+
     registerSpeechActivationHandlers();
     if (window.speechSynthesis) {
         window.speechSynthesis.onvoiceschanged = refreshBnVoice;
@@ -197,7 +195,7 @@ function initSpeech() {
 }
 
 function primeSpeech() {
-    if (speechPrimed || !window.speechSynthesis) {
+    if (speechPrimed || !isMobileDevice() || !window.speechSynthesis) {
         return;
     }
 
@@ -363,7 +361,7 @@ async function speakWithGoogle(text, generation) {
 }
 
 async function speak(text) {
-    if (muted || !text) {
+    if (muted || !text || !isMobileDevice()) {
         return;
     }
 
@@ -401,16 +399,8 @@ async function loadRuntimeConfig() {
         runtimeConfig.intervalSec = Number(localStorage.getItem(STORAGE_KEY_INTERVAL)) || DEFAULT_INTERVAL_SEC;
     }
 
-    runtimeConfig.speechRate = Number(localStorage.getItem(STORAGE_KEY_SPEECH_RATE)) || 1;
-    runtimeConfig.ttsMode = localStorage.getItem(STORAGE_KEY_TTS_MODE) || TTS_MODES.GOOGLE;
-    syncSettingsForm();
-}
-
-function syncSettingsForm() {
-    intervalInput.value = String(runtimeConfig.intervalSec);
-    speechRateInput.value = String(runtimeConfig.speechRate);
-    if (ttsModeInput) {
-        ttsModeInput.value = runtimeConfig.ttsMode;
+    if (localStorage.getItem(STORAGE_KEY_INTERVAL)) {
+        runtimeConfig.intervalSec = Number(localStorage.getItem(STORAGE_KEY_INTERVAL)) || DEFAULT_INTERVAL_SEC;
     }
 }
 
@@ -902,26 +892,6 @@ async function startApp() {
     }
 }
 
-function saveSettings() {
-    runtimeConfig.intervalSec = Math.max(2, Number(intervalInput.value) || DEFAULT_INTERVAL_SEC);
-    runtimeConfig.speechRate = Math.min(2, Math.max(0.5, Number(speechRateInput.value) || 1));
-    runtimeConfig.ttsMode = ttsModeInput?.value || TTS_MODES.GOOGLE;
-
-    localStorage.setItem(STORAGE_KEY_INTERVAL, String(runtimeConfig.intervalSec));
-    localStorage.setItem(STORAGE_KEY_SPEECH_RATE, String(runtimeConfig.speechRate));
-    localStorage.setItem(STORAGE_KEY_TTS_MODE, runtimeConfig.ttsMode);
-
-    setStatus("সেটিংস সংরক্ষিত।");
-    speak("সেটিংস সংরক্ষিত।");
-}
-
-settingsToggle.addEventListener("click", () => {
-    const expanded = settingsToggle.getAttribute("aria-expanded") === "true";
-    settingsToggle.setAttribute("aria-expanded", String(!expanded));
-    settingsPanel.hidden = expanded;
-});
-
-saveSettingsBtn.addEventListener("click", saveSettings);
 startBtn.addEventListener("click", startApp);
 stopBtn.addEventListener("click", stopCamera);
 scanBtn.addEventListener("click", () => {

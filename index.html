@@ -196,7 +196,7 @@
         <h1>দৃশ্য সহায়ক</h1>
         <p class="subtitle">
             আপনার চারপাশের বস্তু ও হাতের ইশারা সহজ বাংলায় বর্ণনা করে — অন্ধ ও দৃষ্টিপ্রতিবন্ধী ব্যবহারকারীদের জন্য।
-            MediaPipe দিয়ে বস্তু শনাক্তকরণ ও হাতের ইশারা চেনা হয়; সব বর্ণনা ব্রাউজারেই তৈরি হয়।
+            AI দিয়ে বস্তু শনাক্তকরণ ও হাতের ইশারা চেনা হয়; সব বর্ণনা ব্রাউজারেই তৈরি হয়।
         </p>
 
         <div class="controls" role="toolbar" aria-label="দৃশ্য সহায়ক নিয়ন্ত্রণ">
@@ -208,10 +208,17 @@
             <button id="mute-btn" class="btn-secondary" type="button" aria-pressed="false">
                 কথা বন্ধ করুন
             </button>
-            <button id="settings-toggle" class="btn-secondary" type="button" aria-expanded="false" aria-controls="settings-panel">
-                সেটিংস
-            </button>
         </div>
+
+        <section class="panel" aria-label="টেক্সট-টু-স্পিচ নির্দেশনা">
+            <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
+                <span style="font-size:1.6rem;">📱</span>
+                <div>
+                    <strong>টেক্সট-টু-স্পিচের জন্য এই ওয়েবসাইটটি আপনার অ্যান্ড্রয়েড ফোনে খুলুন।</strong>
+                    <div class="help">ফোনে খুললে বাংলা বর্ণনা শোনা যাবে।</div>
+                </div>
+            </div>
+        </section>
 
         <section class="panel" aria-labelledby="announcement-heading">
             <h2 id="announcement-heading">বর্তমান বর্ণনা</h2>
@@ -235,37 +242,12 @@
 
         <section class="panel" aria-labelledby="gestures-heading">
             <h2 id="gestures-heading">হাতের ইশারা</h2>
-            <p class="help">ব্যক্তি শনাক্ত হলে MediaPipe হাতের ইশারা চেনে (মুষ্ঠি, খোলা হাত, থাম্বস আপ ইত্যাদি)।</p>
+            <p class="help">ব্যক্তি শনাক্ত হলে AI হাতের ইশারা চেনে (মুষ্ঠি, খোলা হাত, থাম্বস আপ ইত্যাদি)।</p>
             <ul id="gesture-list">
                 <li>ব্যক্তি শনাক্ত হলে ইশারা দেখাবে</li>
             </ul>
         </section>
 
-        <section class="panel">
-            <h2>সেটিংস</h2>
-            <div id="settings-panel" hidden>
-                <label for="interval-sec">
-                    স্বয়ংক্রিয় বর্ণনার মধ্যে ন্যূনতম সময় (সেকেন্ড)
-                    <input id="interval-sec" type="number" min="2" max="30" step="1" value="4">
-                </label>
-                <label for="speech-rate">
-                    কথার গতি (০.৫ – ২)
-                    <input id="speech-rate" type="number" min="0.5" max="2" step="0.1" value="1">
-                </label>
-                <label for="tts-mode">
-                    কথা বলার পদ্ধতি
-                    <select id="tts-mode">
-                        <option value="google" selected>Google (বাংলা — Android/PC-তে নির্ভরযোগ্য)</option>
-                        <option value="auto">স্বয়ংক্রিয় (ব্রাউজার, তারপর Google)</option>
-                        <option value="browser">শুধু ব্রাউজার</option>
-                    </select>
-                </label>
-                <button id="save-settings" class="btn-primary" type="button">সেটিংস সংরক্ষণ</button>
-                <p class="help">
-                    ঐচ্ছিক: <code>config.example.js</code> কপি করে <code>config.js</code> বানিয়ে ডিফল্ট মান সেট করুন।
-                </p>
-            </div>
-        </section>
     </main>
 
     <script src="app.js" type="module"></script>

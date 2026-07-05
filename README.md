@@ -43,8 +43,8 @@ When a **person** is detected, the app runs MediaPipe Gesture Recognizer and ann
 |---------|---------|
 | Open_Palm | খোলা হাত |
 | Closed_Fist | মুষ্ঠি |
-| Thumb_Up | থাম্বস আপ |
-| Victory | ভি (বিজয়) ইশারা |
+| Thumb_Up | সম্মতি |
+| Victory |বিজয় ইশারা |
 | Pointing_Up | উপরের দিকে আঙুল |
 | ILoveYou | আই লাভ ইউ ইশারা |
 
