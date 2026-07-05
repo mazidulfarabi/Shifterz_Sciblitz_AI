@@ -219,7 +219,7 @@ Expected:
 
 | Control | Behavior |
 |---------|----------|
-| **Start camera** | Opens rear/environment camera, loads MediaPipe EfficientDet Lite2 |
+| **Start camera** | Opens rear/environment camera, loads MediaPipe EfficientDet Lite0 |
 | **Describe now / Space** | Forces immediate n8n call + speech |
 | **Auto describe** | When scene changes, at most once every N seconds (default 4) |
 | **Mute speech** | Stops TTS only; detection continues |

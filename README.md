@@ -5,7 +5,7 @@ AI-powered object recognition for **blind and low-vision users**. The camera det
 ## Stack
 
 - Static HTML + ES modules (no build step)
-- MediaPipe Tasks Vision `ObjectDetector` (EfficientDet Lite2)
+- MediaPipe Tasks Vision `ObjectDetector` (EfficientDet Lite0)
 - Web Speech API for text-to-speech
 - n8n webhook for spatial sentence generation
 - Netlify hosting
