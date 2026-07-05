@@ -72,11 +72,10 @@ async function startCamera() {
         }
     });
 
-    video.srcObject = stream;
-
     await new Promise((resolve, reject) => {
-        video.onloadeddata = () => resolve();
+        video.onloadedmetadata = () => resolve();
         video.onerror = () => reject(new Error("Camera preview failed to start."));
+        video.srcObject = stream;
     });
 
     canvasElement.width = video.videoWidth;
@@ -147,8 +146,7 @@ async function startApp() {
     }
 
     if (window.location.protocol === "file:") {
-        setStatus("Open via http://localhost:8080 — do not open the HTML file directly.");
-        return;
+        setStatus("If the browser blocks camera access from a local file, open this page from a local server.");
     }
 
     startBtn.disabled = true;
