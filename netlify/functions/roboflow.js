@@ -42,9 +42,7 @@ exports.handler = async function (event) {
       };
     }
 
-    const imageBuffer = Buffer.from(imageBase64, "base64");
-
-    if (!imageBuffer.length) {
+    if (!imageBase64) {
       return {
         statusCode: 400,
         body: JSON.stringify({ error: "Invalid image payload" })
@@ -66,9 +64,9 @@ exports.handler = async function (event) {
           params: {
             api_key: apiKey
           },
-          data: imageBuffer,
+          data: imageBase64,
           headers: {
-            "Content-Type": mimeType
+            "Content-Type": "application/x-www-form-urlencoded"
           },
           timeout: 60000
         });
@@ -93,13 +91,15 @@ exports.handler = async function (event) {
   } catch (error) {
     console.error(error);
 
+    const upstreamMessage = error.response?.data?.message || error.response?.data?.error || error.message || "Roboflow request failed";
+
     return {
       statusCode: 500,
       headers: {
         "Content-Type": "application/json"
       },
       body: JSON.stringify({
-        error: error.message || "Roboflow request failed"
+        error: upstreamMessage
       })
     };
   }
