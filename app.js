@@ -10,6 +10,7 @@ let lastInferenceAt = 0;
 let inferenceCanvasSize = { width: 320, height: 240 };
 let stream = null;
 let inferenceLoopId = null;
+let inferenceInFlight = false;
 
 function setStatus(message) {
   outputDiv.innerText = message;
@@ -62,15 +63,16 @@ function drawPredictions(predictions) {
 }
 
 async function runInference() {
-  if (!running || video.readyState < 2) {
+  if (!running || video.readyState < 2 || inferenceInFlight) {
     return;
   }
 
   const now = Date.now();
-  if (now - lastInferenceAt < 800) {
+  if (now - lastInferenceAt < 700) {
     return;
   }
   lastInferenceAt = now;
+  inferenceInFlight = true;
 
   const inferenceCanvas = document.createElement("canvas");
   const targetWidth = 320;
@@ -85,7 +87,9 @@ async function runInference() {
   const dataUrl = inferenceCanvas.toDataURL("image/jpeg", 0.85);
   const imageBase64 = dataUrl.split(",")[1];
 
-  setStatus("Analyzing frame...");
+  if (!inferenceInFlight) {
+    setStatus("Analyzing frame...");
+  }
 
   try {
     const response = await fetch("/.netlify/functions/roboflow", {
@@ -120,15 +124,17 @@ async function runInference() {
         ? payload.result.predictions
         : [];
 
-    if (predictions.length > 0) {
-      const topPrediction = predictions.reduce((best, current) => {
-        const currentScore = Number(current.confidence || 0);
-        const bestScore = Number(best.confidence || 0);
+    const parsedPredictions = predictions.filter((prediction) => prediction && typeof prediction === "object");
+
+    if (parsedPredictions.length > 0) {
+      const topPrediction = parsedPredictions.reduce((best, current) => {
+        const currentScore = Number(current.confidence || current.conf || 0);
+        const bestScore = Number(best.confidence || best.conf || 0);
         return currentScore > bestScore ? current : best;
       });
 
-      const label = topPrediction.class_name || topPrediction.className || topPrediction.class || "Detected object";
-      const confidence = Math.round((topPrediction.confidence || 0) * 100);
+      const label = topPrediction.class_name || topPrediction.className || topPrediction.class || topPrediction.label || topPrediction.name || "Detected object";
+      const confidence = Math.round((Number(topPrediction.confidence || topPrediction.conf || 0)) * 100);
       setStatus(`${label} (${confidence}%)`);
     } else {
       const detail = payload.error || payload.message || "";
@@ -140,6 +146,8 @@ async function runInference() {
   } catch (error) {
     console.error(error);
     setStatus(`Inference error: ${error.message}`);
+  } finally {
+    inferenceInFlight = false;
   }
 }
 
