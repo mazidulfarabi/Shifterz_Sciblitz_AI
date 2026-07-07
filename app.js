@@ -2,6 +2,7 @@ const video = document.getElementById("webcam");
 const canvasElement = document.getElementById("output_canvas");
 const canvasCtx = canvasElement.getContext("2d");
 const outputDiv = document.getElementById("output");
+const debugDiv = document.getElementById("debug-output");
 const startBtn = document.getElementById("start-btn");
 
 let running = false;
@@ -12,6 +13,10 @@ let inferenceLoopId = null;
 
 function setStatus(message) {
   outputDiv.innerText = message;
+}
+
+function setDebug(message) {
+  debugDiv.innerText = message;
 }
 
 function drawVideoFrame() {
@@ -91,8 +96,29 @@ async function runInference() {
       body: JSON.stringify({ imageBase64 })
     });
 
-    const payload = await response.json();
-    const predictions = payload.predictions || [];
+    const rawText = await response.text();
+    let payload = {};
+
+    try {
+      payload = rawText ? JSON.parse(rawText) : {};
+    } catch {
+      payload = { error: rawText || "Invalid response from Roboflow" };
+    }
+
+    setDebug(JSON.stringify(payload, null, 2));
+
+    if (!response.ok) {
+      const message = payload.error || payload.message || `Request failed with ${response.status}`;
+      setStatus(`Roboflow error: ${message}`);
+      drawVideoFrame();
+      return;
+    }
+
+    const predictions = Array.isArray(payload.predictions)
+      ? payload.predictions
+      : Array.isArray(payload.result?.predictions)
+        ? payload.result.predictions
+        : [];
 
     if (predictions.length > 0) {
       const topPrediction = predictions.reduce((best, current) => {
@@ -101,11 +127,12 @@ async function runInference() {
         return currentScore > bestScore ? current : best;
       });
 
-      const label = topPrediction.class_name || topPrediction.className || "Detected object";
+      const label = topPrediction.class_name || topPrediction.className || topPrediction.class || "Detected object";
       const confidence = Math.round((topPrediction.confidence || 0) * 100);
       setStatus(`${label} (${confidence}%)`);
     } else {
-      setStatus("No object detected — move into frame");
+      const detail = payload.error || payload.message || "";
+      setStatus(detail ? `No object detected — ${detail}` : "No object detected — move into frame");
     }
 
     drawVideoFrame();
