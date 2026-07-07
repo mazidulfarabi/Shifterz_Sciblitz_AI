@@ -1,5 +1,18 @@
 const axios = require("axios");
 
+function normalizeImageBase64(value) {
+  if (!value) {
+    return "";
+  }
+
+  const dataUrlMatch = value.match(/^data:(image\/\w+);base64,(.+)$/i);
+  if (dataUrlMatch) {
+    return dataUrlMatch[2];
+  }
+
+  return value;
+}
+
 exports.handler = async function (event) {
   if (event.httpMethod !== "POST") {
     return {
@@ -10,7 +23,8 @@ exports.handler = async function (event) {
 
   try {
     const body = JSON.parse(event.body || "{}");
-    const imageBase64 = body.imageBase64 || body.image || "";
+    const imageBase64 = normalizeImageBase64(body.imageBase64 || body.image || "");
+    const mimeType = body.mimeType || "image/jpeg";
 
     if (!imageBase64) {
       return {
@@ -28,26 +42,54 @@ exports.handler = async function (event) {
       };
     }
 
-    const response = await axios({
-      method: "POST",
-      url: "https://serverless.roboflow.com/asl-vp1tt/1",
-      params: {
-        api_key: apiKey
-      },
-      data: imageBase64,
-      headers: {
-        "Content-Type": "application/x-www-form-urlencoded"
-      },
-      timeout: 60000
-    });
+    const imageBuffer = Buffer.from(imageBase64, "base64");
 
-    return {
-      statusCode: 200,
-      headers: {
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify(response.data)
-    };
+    if (!imageBuffer.length) {
+      return {
+        statusCode: 400,
+        body: JSON.stringify({ error: "Invalid image payload" })
+      };
+    }
+
+    const inferenceUrls = [
+      "https://serverless.roboflow.com/asl-vp1tt/1",
+      "https://detect.roboflow.com/asl-vp1tt/1"
+    ];
+
+    let lastError;
+
+    for (const inferenceUrl of inferenceUrls) {
+      try {
+        const response = await axios({
+          method: "POST",
+          url: inferenceUrl,
+          params: {
+            api_key: apiKey
+          },
+          data: imageBuffer,
+          headers: {
+            "Content-Type": mimeType
+          },
+          timeout: 60000
+        });
+
+        return {
+          statusCode: 200,
+          headers: {
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify(response.data)
+        };
+      } catch (error) {
+        lastError = error;
+        if (error.response?.status && [400, 404].includes(error.response.status)) {
+          continue;
+        }
+        throw error;
+      }
+    }
+
+    throw lastError;
   } catch (error) {
     console.error(error);
 

@@ -82,7 +82,7 @@ async function runInference() {
   const inferenceCtx = inferenceCanvas.getContext("2d");
   inferenceCtx.drawImage(video, 0, 0, targetWidth, targetHeight);
 
-  const dataUrl = inferenceCanvas.toDataURL("image/jpeg", 0.7);
+  const dataUrl = inferenceCanvas.toDataURL("image/jpeg", 0.85);
   const imageBase64 = dataUrl.split(",")[1];
 
   setStatus("Analyzing frame...");
@@ -93,7 +93,7 @@ async function runInference() {
       headers: {
         "Content-Type": "application/json"
       },
-      body: JSON.stringify({ imageBase64 })
+      body: JSON.stringify({ imageBase64, mimeType: "image/jpeg" })
     });
 
     const rawText = await response.text();
