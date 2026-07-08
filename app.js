@@ -831,29 +831,32 @@ function drawDetections(objects, gestures) {
         canvasCtx.fillText(tag, x + 4, Math.max(14, y - 6));
     });
 
-    // Draw red dot overlays for gesture landmarks
+    // Draw gesture landmarks (all finger/hand points)
     if (gestures.length > 0) {
         gestures.forEach((gesture) => {
-            // For each gesture, draw red dot at its position
+            const landmarks = gesture.landmarks || [];
+            // Draw each landmark as a small filled circle
             canvasCtx.fillStyle = "#FF0000";
-            canvasCtx.strokeStyle = "#FF0000";
-            canvasCtx.lineWidth = 1;
-            
-            // Draw a circle for the gesture hand position
-            const handX = gesture.center_x * canvasElement.width;
-            const handY = gesture.center_y * canvasElement.height;
-            const radius = 8;
-            
-            canvasCtx.beginPath();
-            canvasCtx.arc(handX, handY, radius, 0, 2 * Math.PI);
-            canvasCtx.fill();
-            
-            // Draw circle outline
-            canvasCtx.strokeStyle = "#FF0000";
-            canvasCtx.lineWidth = 2;
-            canvasCtx.beginPath();
-            canvasCtx.arc(handX, handY, radius, 0, 2 * Math.PI);
-            canvasCtx.stroke();
+            canvasCtx.strokeStyle = "#880000";
+            landmarks.forEach((lm) => {
+                const lx = (lm.x || 0) * canvasElement.width;
+                const ly = (lm.y || 0) * canvasElement.height;
+                const r = 3;
+                canvasCtx.beginPath();
+                canvasCtx.arc(lx, ly, r, 0, 2 * Math.PI);
+                canvasCtx.fill();
+            });
+
+            // Optionally draw a slightly larger circle at the wrist/center
+            if (typeof gesture.center_x === "number" && typeof gesture.center_y === "number") {
+                const handX = gesture.center_x * canvasElement.width;
+                const handY = gesture.center_y * canvasElement.height;
+                canvasCtx.strokeStyle = "#FF0000";
+                canvasCtx.lineWidth = 2;
+                canvasCtx.beginPath();
+                canvasCtx.arc(handX, handY, 6, 0, 2 * Math.PI);
+                canvasCtx.stroke();
+            }
         });
     }
 }
@@ -923,8 +926,6 @@ function processFrame(forceAnnounce = false) {
     }
 
     drawDetections(objects, gestures);
-    renderObjectList(objects);
-    renderGestureList(gestures);
     announceScene(objects, gestures, forceAnnounce);
 }
 

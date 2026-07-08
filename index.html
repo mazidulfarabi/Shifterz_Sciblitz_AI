@@ -60,7 +60,6 @@
             left: 0;
             width: 100%;
             height: 100%;
-            transform: scaleX(-1);
         }
 
         canvas {
@@ -162,6 +161,12 @@
             color: #555;
         }
 
+        /* Hide detailed lists - announcements are sufficient */
+        #object-list,
+        #gesture-list {
+            display: none;
+        }
+
         #object-list li,
         #gesture-list li {
             padding: 6px 0;
@@ -210,40 +215,6 @@
                 <li>None</li>
             </ul>
         </div>
-    </main>
-
-    <script src="app.js" type="module"></script>
-</body>
-</html>
-
-        <section class="panel" aria-labelledby="announcement-heading">
-            <h2 id="announcement-heading">বর্তমান বর্ণনা</h2>
-            <div id="announcement" role="status" aria-live="assertive" aria-atomic="true" translate="no">
-                শুরু করতে ক্যামেরা চালু করুন চাপুন।
-            </div>
-            <p id="status" aria-live="polite"></p>
-        </section>
-
-        <div class="video-container" aria-hidden="true">
-            <video id="webcam" autoplay playsinline muted></video>
-            <canvas id="output_canvas"></canvas>
-        </div>
-
-        <section class="panel" aria-labelledby="objects-heading">
-            <h2 id="objects-heading">শনাক্ত বস্তু</h2>
-            <ul id="object-list">
-                <li>ক্যামেরার জন্য অপেক্ষা...</li>
-            </ul>
-        </section>
-
-        <section class="panel" aria-labelledby="gestures-heading">
-            <h2 id="gestures-heading">হাতের ইশারা</h2>
-            <p class="help">ব্যক্তি শনাক্ত হলে AI হাতের ইশারা চেনে (মুষ্ঠি, খোলা হাত, থাম্বস আপ ইত্যাদি)।</p>
-            <ul id="gesture-list">
-                <li>ব্যক্তি শনাক্ত হলে ইশারা দেখাবে</li>
-            </ul>
-        </section>
-
     </main>
 
     <script src="app.js" type="module"></script>
