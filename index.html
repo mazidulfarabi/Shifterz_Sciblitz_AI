@@ -86,6 +86,56 @@
             display: none;
         }
 
+        .engine-loader {
+            position: absolute;
+            inset: 0;
+            z-index: 20;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: #ffffff;
+        }
+
+        .engine-loader[hidden] {
+            display: none;
+        }
+
+        .engine-loader-inner {
+            text-align: center;
+            padding: 24px;
+            max-width: 90%;
+        }
+
+        .engine-loader-spinner {
+            width: 44px;
+            height: 44px;
+            margin: 0 auto 18px;
+            border: 3px solid #e5e7eb;
+            border-top-color: #2563eb;
+            border-radius: 50%;
+            animation: engine-loader-spin 0.85s linear infinite;
+        }
+
+        @keyframes engine-loader-spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        .engine-loader-inner p {
+            color: #1f2937;
+            font-size: 15px;
+            font-weight: 600;
+            line-height: 1.4;
+        }
+
+        .engine-loader-hint {
+            font-size: 13px !important;
+            font-weight: 400 !important;
+            color: #6b7280 !important;
+            margin-top: 8px;
+        }
+
         .controls {
             display: flex;
             gap: 12px;
@@ -134,6 +184,20 @@
 
         #scan-btn:hover {
             background: #6d28d9;
+        }
+
+        #switch-camera-btn {
+            background: #0d9488;
+            color: white;
+        }
+
+        #switch-camera-btn:hover:not(:disabled) {
+            background: #0f766e;
+        }
+
+        #switch-camera-btn:disabled {
+            background: #94a3b8;
+            cursor: not-allowed;
         }
 
         #mute-btn {
@@ -187,12 +251,20 @@
             <video id="webcam" autoplay playsinline muted></video>
             <canvas id="output_canvas"></canvas>
             <div id="gesture-overlay" class="gesture-overlay" hidden></div>
+            <div id="engine-loader" class="engine-loader" hidden>
+                <div class="engine-loader-inner">
+                    <div class="engine-loader-spinner" aria-hidden="true"></div>
+                    <p id="engine-loader-text">Loading vision engine…</p>
+                    <p class="engine-loader-hint">First launch may take 30–60 seconds while models download.</p>
+                </div>
+            </div>
         </div>
 
         <div class="controls">
             <button id="start-btn" type="button">Start Camera</button>
             <button id="stop-btn" type="button" hidden>Stop Camera</button>
             <button id="scan-btn" type="button" hidden>Scan Now</button>
+            <button id="switch-camera-btn" type="button" hidden>Use Back Camera</button>
             <button id="mute-btn" type="button">Mute Audio</button>
         </div>
 

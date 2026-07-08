@@ -47,9 +47,12 @@ const canvasCtx = canvasElement.getContext("2d");
 const startBtn = document.getElementById("start-btn");
 const stopBtn = document.getElementById("stop-btn");
 const scanBtn = document.getElementById("scan-btn");
+const switchCameraBtn = document.getElementById("switch-camera-btn");
 const statusRegion = document.getElementById("status");
 const announcementRegion = document.getElementById("announcement");
 const gestureOverlay = document.getElementById("gesture-overlay");
+const engineLoader = document.getElementById("engine-loader");
+const engineLoaderText = document.getElementById("engine-loader-text");
 const muteBtn = document.getElementById("mute-btn");
 
 let objectDetector = undefined;
@@ -62,6 +65,7 @@ let lastAnnounceAt = 0;
 let lastSceneSignature = "";
 let pendingAnnounce = false;
 let cameraStream = null;
+let cameraFacingMode = "user";
 let gestureFrameCounter = 0;
 let lastGestures = [];
 let speechVoice = null;
@@ -352,6 +356,25 @@ function setAnnouncement(message) {
     announcementRegion.textContent = message;
 }
 
+function showLoader(message) {
+    if (engineLoader) {
+        engineLoader.hidden = false;
+    }
+    setLoaderMessage(message);
+}
+
+function hideLoader() {
+    if (engineLoader) {
+        engineLoader.hidden = true;
+    }
+}
+
+function setLoaderMessage(message) {
+    if (engineLoaderText && message) {
+        engineLoaderText.textContent = message;
+    }
+}
+
 function updateGestureOverlay(gestures, faceAnalyses = []) {
     if (!gestureOverlay) {
         return;
@@ -399,6 +422,7 @@ async function loadVisionTasks() {
 }
 
 async function loadObjectDetector(vision) {
+    setLoaderMessage("Loading object detection model…");
     setStatus("Loading object detection model (30–60 seconds on first load)...");
 
     return withTimeout(
@@ -419,6 +443,8 @@ async function loadObjectDetector(vision) {
 }
 
 async function loadFaceLandmarker(vision) {
+    setLoaderMessage("Loading face analysis model…");
+
     return withTimeout(
         FaceLandmarker.createFromOptions(vision, {
             baseOptions: {
@@ -437,6 +463,8 @@ async function loadFaceLandmarker(vision) {
 }
 
 async function loadGestureRecognizer(vision) {
+    setLoaderMessage("Loading gesture recognition model…");
+
     return withTimeout(
         GestureRecognizer.createFromOptions(vision, {
             baseOptions: {
@@ -452,18 +480,18 @@ async function loadGestureRecognizer(vision) {
     );
 }
 
-async function startCamera() {
+async function startCamera(facingMode = cameraFacingMode) {
     if (!navigator.mediaDevices?.getUserMedia) {
         throw new Error("Camera is not supported in this browser.");
     }
 
-    setStatus("Requesting camera permission...");
+    cameraFacingMode = facingMode;
 
     cameraStream = await navigator.mediaDevices.getUserMedia({
         video: {
             width: { ideal: 640 },
             height: { ideal: 480 },
-            facingMode: { ideal: "user" }
+            facingMode: { ideal: facingMode }
         },
         audio: false
     });
@@ -477,6 +505,58 @@ async function startCamera() {
     canvasElement.width = video.videoWidth;
     canvasElement.height = video.videoHeight;
     await video.play();
+    updateSwitchCameraLabel();
+}
+
+function updateSwitchCameraLabel() {
+    if (!switchCameraBtn) {
+        return;
+    }
+
+    switchCameraBtn.textContent = cameraFacingMode === "user"
+        ? "Use Back Camera"
+        : "Use Front Camera";
+}
+
+async function switchCamera() {
+    if (!running) {
+        return;
+    }
+
+    const nextMode = cameraFacingMode === "user" ? "environment" : "user";
+    const previousMode = cameraFacingMode;
+
+    if (switchCameraBtn) {
+        switchCameraBtn.disabled = true;
+    }
+
+    try {
+        if (cameraStream) {
+            cameraStream.getTracks().forEach((track) => track.stop());
+            cameraStream = null;
+        }
+
+        await startCamera(nextMode);
+        lastVideoTime = -1;
+        lastSceneSignature = "";
+        setStatus(`Using ${nextMode === "user" ? "front" : "back"} camera.`);
+        processFrame(true);
+    } catch (err) {
+        console.error(err);
+        cameraFacingMode = previousMode;
+
+        try {
+            await startCamera(previousMode);
+            setStatus("Could not switch camera. This device may only have one camera.");
+        } catch (restoreErr) {
+            console.error(restoreErr);
+            setStatus("Camera error while switching. Try stopping and starting again.");
+        }
+    } finally {
+        if (switchCameraBtn) {
+            switchCameraBtn.disabled = false;
+        }
+    }
 }
 
 function stopCamera() {
@@ -492,7 +572,11 @@ function stopCamera() {
     startBtn.hidden = false;
     stopBtn.hidden = true;
     scanBtn.hidden = true;
+    if (switchCameraBtn) {
+        switchCameraBtn.hidden = true;
+    }
     lastGestures = [];
+    hideLoader();
     updateGestureOverlay([]);
     setStatus("Camera stopped.");
 }
@@ -1176,21 +1260,30 @@ async function startApp() {
     primeSpeech();
 
     try {
+        showLoader("Requesting camera access…");
+        setStatus("Requesting camera permission...");
         await startCamera();
+        setLoaderMessage("Loading vision engine…");
         setStatus("Camera active. Loading AI models...");
         const vision = await loadVisionTasks();
         objectDetector = await loadObjectDetector(vision);
         faceLandmarker = await loadFaceLandmarker(vision);
         gestureRecognizer = await loadGestureRecognizer(vision);
+        hideLoader();
         running = true;
         startBtn.hidden = true;
         stopBtn.hidden = false;
         scanBtn.hidden = false;
+        if (switchCameraBtn) {
+            switchCameraBtn.hidden = false;
+            updateSwitchCameraLabel();
+        }
         setStatus("Ready. Point camera at your surroundings.");
         setAnnouncement("Detection active.");
         predictWebcam();
     } catch (err) {
         console.error(err);
+        hideLoader();
         startBtn.disabled = false;
 
         if (err.name === "NotAllowedError" || err.name === "PermissionDeniedError") {
@@ -1210,6 +1303,10 @@ scanBtn.addEventListener("click", () => {
         processFrame(true);
     }
 });
+
+if (switchCameraBtn) {
+    switchCameraBtn.addEventListener("click", switchCamera);
+}
 
 muteBtn.addEventListener("click", () => {
     muted = !muted;
