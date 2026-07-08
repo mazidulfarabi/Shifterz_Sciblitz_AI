@@ -86,16 +86,16 @@ const GESTURE_NAMES_BN = {
 };
 
 const DEPTH_LABELS_BN = {
-    very_near: "খুব কাছে",
-    near: "কাছে",
-    medium: "মাঝারি দূরত্বে",
-    far: "দূরে"
+    very_near: "very close",
+    near: "close",
+    medium: "medium distance",
+    far: "far"
 };
 
 const HORIZONTAL_LABELS_BN = {
-    left: "আপনার বামে",
-    center: "আপনার সামনে",
-    right: "আপনার ডানে"
+    left: "on your left",
+    center: "in front of you",
+    right: "on your right"
 };
 
 const video = document.getElementById("webcam");
@@ -432,7 +432,7 @@ async function loadVisionTasks() {
 }
 
 async function loadObjectDetector(vision) {
-    setStatus("বস্তু শনাক্তকরণ মডেল লোড হচ্ছে। প্রথমবার ৩০–৬০ সেকেন্ড লাগতে পারে।");
+    setStatus("Loading object detection model (30–60 seconds on first load)...");
 
     return withTimeout(
         ObjectDetector.createFromOptions(vision, {
@@ -469,10 +469,10 @@ async function loadGestureRecognizer(vision) {
 
 async function startCamera() {
     if (!navigator.mediaDevices?.getUserMedia) {
-        throw new Error("এই ব্রাউজারে ক্যামেরা সমর্থিত নয়।");
+        throw new Error("Camera is not supported in this browser.");
     }
 
-    setStatus("ক্যামেরার অনুমতি চাওয়া হচ্ছে।");
+    setStatus("Requesting camera permission...");
 
     cameraStream = await navigator.mediaDevices.getUserMedia({
         video: {
@@ -485,7 +485,7 @@ async function startCamera() {
 
     await new Promise((resolve, reject) => {
         video.onloadedmetadata = () => resolve();
-        video.onerror = () => reject(new Error("ক্যামেরা প্রিভিউ শুরু করতে ব্যর্থ।"));
+        video.onerror = () => reject(new Error("Failed to start camera preview."));
         video.srcObject = cameraStream;
     });
 
@@ -509,7 +509,7 @@ function stopCamera() {
     scanBtn.hidden = true;
     lastGestures = [];
     renderGestureList([]);
-    setStatus("ক্যামেরা বন্ধ।");
+    setStatus("Camera stopped.");
 }
 
 function horizontalZone(centerX) {
@@ -547,15 +547,74 @@ function objectNameBn(obj) {
     return "একটি বস্তু";
 }
 
+// Color palette for different objects
+const OBJECT_COLORS = {
+    person: "#FF6B6B",
+    bicycle: "#4ECDC4",
+    car: "#45B7D1",
+    motorcycle: "#FFA07A",
+    bus: "#98D8C8",
+    train: "#F7DC6F",
+    truck: "#BB8FCE",
+    boat: "#85C1E2",
+    bird: "#F8B88B",
+    cat: "#F0A500",
+    dog: "#D2B48C",
+    horse: "#8B4513",
+    backpack: "#9B59B6",
+    umbrella: "#3498DB",
+    handbag: "#E74C3C",
+    tie: "#2980B9",
+    suitcase: "#A93226",
+    bottle: "#16A085",
+    cup: "#27AE60",
+    fork: "#BDC3C7",
+    knife: "#95A5A6",
+    spoon: "#7F8C8D",
+    bowl: "#34495E",
+    banana: "#F39C12",
+    apple: "#C0392B",
+    sandwich: "#D35400",
+    orange: "#E67E22",
+    pizza: "#E59866",
+    donut: "#F4D03F",
+    cake: "#DC7633",
+    chair: "#A29BFE",
+    couch: "#6C5CE7",
+    "potted plant": "#00B894",
+    bed: "#FF7675",
+    "dining table": "#FDCB6E",
+    toilet: "#74B9FF",
+    tv: "#A29BFE",
+    laptop: "#636E72",
+    mouse: "#2D3436",
+    remote: "#00CEC9",
+    keyboard: "#0984E3",
+    "cell phone": "#6C5CE7",
+    microwave: "#FF6348",
+    oven: "#FF5252",
+    refrigerator: "#536DFE",
+    book: "#5352ED",
+    clock: "#FF8B94",
+    vase: "#BA55D3",
+    scissors: "#778899",
+    "teddy bear": "#CD853F"
+};
+
+function getObjectColor(label) {
+    const key = label.toLowerCase();
+    return OBJECT_COLORS[key] || "#00BFFF";
+}
+
 function handLabelFromHandedness(handednessCategory) {
     const name = handednessCategory?.categoryName;
     if (name === "Left") {
-        return "বাম হাত";
+        return "Left hand";
     }
     if (name === "Right") {
-        return "ডান হাত";
+        return "Right hand";
     }
-    return "হাত";
+    return "Hand";
 }
 
 function spatialPosition(bbox, frameWidth, frameHeight) {
@@ -617,6 +676,7 @@ function detectGestures() {
 
     const results = gestureRecognizer.recognizeForVideo(video, performance.now());
     const fw = video.videoWidth || 1;
+    const fh = video.videoHeight || 1;
     const gestures = [];
 
     (results.gestures || []).forEach((handGestures, handIndex) => {
@@ -632,6 +692,7 @@ function detectGestures() {
         const landmarks = results.landmarks?.[handIndex];
         const wrist = landmarks?.[0];
         const centerX = wrist ? wrist.x : 0.5;
+        const centerY = wrist ? wrist.y : 0.5;
         const handednessCategory = results.handedness?.[handIndex]?.[0];
 
         gestures.push({
@@ -639,7 +700,10 @@ function detectGestures() {
             gesture: topGesture.categoryName,
             gesture_bn: GESTURE_NAMES_BN[topGesture.categoryName] || "অজানা ইশারা",
             confidence: Number(topGesture.score.toFixed(3)),
-            horizontal: horizontalZone(centerX)
+            horizontal: horizontalZone(centerX),
+            center_x: centerX,
+            center_y: centerY,
+            landmarks: landmarks || []
         });
     });
 
@@ -664,38 +728,38 @@ function buildSpatialSentence(objects, gestures) {
     const parts = [];
 
     if (objects.length === 0 && gestures.length === 0) {
-        return "আপনার সামনে কোনো চিহ্নিত বস্তু দেখছি না।";
+        return "No detected objects or gestures.";
     }
 
     if (objects.length > 0) {
         const objectParts = objects.slice(0, 4).map((obj) => {
-            const name = objectNameBn(obj);
+            const name = obj.display_name;
             const where = horizontalLabel(obj.position.horizontal);
             return `${name}, ${depthLabel(obj.position.depth)}, ${where}`;
         });
 
         if (objectParts.length === 1) {
-            parts.push(`আমি দেখছি ${objectParts[0]}`);
+            parts.push(`Detected: ${objectParts[0]}`);
         } else {
             const last = objectParts.pop();
-            parts.push(`আমি দেখছি ${objectParts.join("; ")}, এবং ${last}`);
+            parts.push(`Detected: ${objectParts.join("; ")}, and ${last}`);
         }
     }
 
     if (gestures.length > 0) {
         const gestureParts = gestures.map((gesture) => {
             const where = horizontalLabel(gesture.horizontal);
-            return `${where} ${gesture.hand} ${gesture.gesture_bn} ইশারা দেখাচ্ছে`;
+            return `${where} ${gesture.hand} showing ${gesture.gesture.replace(/_/g, " ")}`;
         });
 
         if (parts.length === 0) {
             parts.push(gestureParts.join("; "));
         } else {
-            parts.push(`এছাড়াও, ${gestureParts.join("; ")}`);
+            parts.push(`Also: ${gestureParts.join("; ")}`);
         }
     }
 
-    return `${parts.join(". ")}।`;
+    return `${parts.join(". ")}.`;
 }
 
 function renderObjectList(objects) {
@@ -703,14 +767,14 @@ function renderObjectList(objects) {
 
     if (objects.length === 0) {
         const item = document.createElement("li");
-        item.textContent = "কোনো বস্তু শনাক্ত হয়নি";
+        item.textContent = "No objects detected";
         objectList.appendChild(item);
         return;
     }
 
     objects.forEach((obj) => {
         const item = document.createElement("li");
-        item.textContent = `${objectNameBn(obj)} — ${depthLabel(obj.position.depth)}, ${horizontalLabel(obj.position.horizontal)} (${Math.round(obj.confidence * 100)}%)`;
+        item.textContent = `${obj.display_name} — ${depthLabel(obj.position.depth)}, ${horizontalLabel(obj.position.horizontal)} (${Math.round(obj.confidence * 100)}%)`;
         objectList.appendChild(item);
     });
 }
@@ -724,14 +788,14 @@ function renderGestureList(gestures) {
 
     if (gestures.length === 0) {
         const item = document.createElement("li");
-        item.textContent = "কোনো হাতের ইশারা শনাক্ত হয়নি";
+        item.textContent = "No gestures detected";
         gestureList.appendChild(item);
         return;
     }
 
     gestures.forEach((gesture) => {
         const item = document.createElement("li");
-        item.textContent = `${gesture.hand} — ${gesture.gesture_bn}, ${horizontalLabel(gesture.horizontal)} (${Math.round(gesture.confidence * 100)}%)`;
+        item.textContent = `${gesture.hand} — ${gesture.gesture.replace(/_/g, " ")}, ${horizontalLabel(gesture.horizontal)} (${Math.round(gesture.confidence * 100)}%)`;
         gestureList.appendChild(item);
     });
 }
@@ -739,34 +803,59 @@ function renderGestureList(gestures) {
 function drawDetections(objects, gestures) {
     canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
     canvasCtx.lineWidth = 2;
-    canvasCtx.font = "14px sans-serif";
+    canvasCtx.font = "12px sans-serif";
 
+    // Draw objects with unique colors per type
     objects.forEach((obj) => {
         const x = obj.bbox.x * canvasElement.width;
         const y = obj.bbox.y * canvasElement.height;
         const w = obj.bbox.width * canvasElement.width;
         const h = obj.bbox.height * canvasElement.height;
 
-        canvasCtx.strokeStyle = "#22c55e";
-        canvasCtx.fillStyle = "rgba(34, 197, 94, 0.15)";
-        canvasCtx.fillRect(x, y, w, h);
+        const color = getObjectColor(obj.label);
+        canvasCtx.strokeStyle = color;
+        canvasCtx.lineWidth = 2;
         canvasCtx.strokeRect(x, y, w, h);
 
-        const tag = `${objectNameBn(obj)} ${Math.round(obj.confidence * 100)}%`;
-        canvasCtx.fillStyle = "#14532d";
-        canvasCtx.fillRect(x, Math.max(0, y - 18), canvasCtx.measureText(tag).width + 8, 18);
-        canvasCtx.fillStyle = "#ecfdf5";
-        canvasCtx.fillText(tag, x + 4, Math.max(12, y - 5));
+        // Draw semi-transparent fill
+        canvasCtx.fillStyle = color + "30"; // 30 = ~19% opacity in hex
+        canvasCtx.fillRect(x, y, w, h);
+
+        // Draw label
+        const tag = `${obj.display_name} ${Math.round(obj.confidence * 100)}%`;
+        const textWidth = canvasCtx.measureText(tag).width;
+        
+        canvasCtx.fillStyle = color;
+        canvasCtx.fillRect(x, Math.max(0, y - 20), textWidth + 8, 18);
+        canvasCtx.fillStyle = "#fff";
+        canvasCtx.fillText(tag, x + 4, Math.max(14, y - 6));
     });
 
-    gestures.forEach((gesture, index) => {
-        const y = 24 + index * 22;
-        const tag = `${gesture.gesture_bn} (${gesture.hand})`;
-        canvasCtx.fillStyle = "#1e3a8a";
-        canvasCtx.fillRect(8, y - 16, canvasCtx.measureText(tag).width + 10, 20);
-        canvasCtx.fillStyle = "#dbeafe";
-        canvasCtx.fillText(tag, 12, y);
-    });
+    // Draw red dot overlays for gesture landmarks
+    if (gestures.length > 0) {
+        gestures.forEach((gesture) => {
+            // For each gesture, draw red dot at its position
+            canvasCtx.fillStyle = "#FF0000";
+            canvasCtx.strokeStyle = "#FF0000";
+            canvasCtx.lineWidth = 1;
+            
+            // Draw a circle for the gesture hand position
+            const handX = gesture.center_x * canvasElement.width;
+            const handY = gesture.center_y * canvasElement.height;
+            const radius = 8;
+            
+            canvasCtx.beginPath();
+            canvasCtx.arc(handX, handY, radius, 0, 2 * Math.PI);
+            canvasCtx.fill();
+            
+            // Draw circle outline
+            canvasCtx.strokeStyle = "#FF0000";
+            canvasCtx.lineWidth = 2;
+            canvasCtx.beginPath();
+            canvasCtx.arc(handX, handY, radius, 0, 2 * Math.PI);
+            canvasCtx.stroke();
+        });
+    }
 }
 
 async function announceScene(objects, gestures, force = false) {
@@ -795,20 +884,20 @@ async function announceScene(objects, gestures, force = false) {
     pendingAnnounce = false;
 
     setAnnouncement(sentence);
-    speak(sentence);
+    // speak(sentence);
 
     if (objects.length === 0 && gestures.length === 0) {
-        setStatus("স্ক্যান চলছে। কোনো বস্তু দেখা যাচ্ছে না।");
+        setStatus("Scanning. No objects detected.");
     } else {
         const objectCount = objects.length;
         const gestureCount = gestures.length;
-        let status = `স্ক্যান চলছে। ${objectCount}টি বস্তু`;
+        let status = `Scanning. ${objectCount} object${objectCount !== 1 ? 's' : ''}`;
 
         if (gestureCount > 0) {
-            status += `, ${gestureCount}টি হাতের ইশারা`;
+            status += `, ${gestureCount} gesture${gestureCount !== 1 ? 's' : ''}`;
         }
 
-        setStatus(`${status} শনাক্ত হয়েছে।`);
+        setStatus(`${status} detected.`);
     }
 }
 
@@ -858,7 +947,7 @@ async function startApp() {
     }
 
     if (window.location.protocol === "file:") {
-        setStatus("নির্ভরযোগ্য ক্যামেরার জন্য HTTPS-এ (যেমন Netlify) পৃষ্ঠাটি খুলুন।");
+        setStatus("For reliable camera access, open this page from HTTPS (e.g., Netlify).");
     }
 
     startBtn.disabled = true;
@@ -866,7 +955,7 @@ async function startApp() {
 
     try {
         await startCamera();
-        setStatus("ক্যামেরা চালু। মডেল লোড হচ্ছে।");
+        setStatus("Camera active. Loading AI models...");
         const vision = await loadVisionTasks();
         objectDetector = await loadObjectDetector(vision);
         gestureRecognizer = await loadGestureRecognizer(vision);
@@ -874,20 +963,19 @@ async function startApp() {
         startBtn.hidden = true;
         stopBtn.hidden = false;
         scanBtn.hidden = false;
-        setStatus("প্রস্তুত। ক্যামেরা আপনার চারপাশের দিকে ধরুন।");
-        setAnnouncement("দৃষ্টি সহায়ক চালু হয়েছে।");
-        speak("দৃষ্টি সহায়ক চালু হয়েছে। আমি আপনার চারপাশের বস্তু এবং হাতের ইশারা বর্ণনা করব।");
+        setStatus("Ready. Point camera at your surroundings.");
+        setAnnouncement("Detection active.");
         predictWebcam();
     } catch (err) {
         console.error(err);
         startBtn.disabled = false;
 
         if (err.name === "NotAllowedError" || err.name === "PermissionDeniedError") {
-            setStatus("ক্যামেরা ব্লক করা। অনুমতি দিন, তারপর আবার শুরু চাপুন।");
+            setStatus("Camera access denied. Allow camera in browser settings, then try again.");
         } else if (err.name === "NotFoundError") {
-            setStatus("কোনো ক্যামেরা পাওয়া যায়নি। ক্যামেরা সংযুক্ত করে আবার চেষ্টা করুন।");
+            setStatus("No camera found. Connect a camera and try again.");
         } else {
-            setStatus(`ত্রুটি: ${err.message}`);
+            setStatus(`Error: ${err.message}`);
         }
     }
 }

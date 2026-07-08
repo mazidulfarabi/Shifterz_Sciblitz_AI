@@ -1,202 +1,220 @@
 <!DOCTYPE html>
-<html lang="bn" translate="no">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="google" content="notranslate">
-    <title>দৃষ্টি সহায়ক</title>
-    <meta name="description" content="অন্ধ ও দৃষ্টিপ্রতিবন্ধী ব্যবহারকারীদের জন্য বাস্তব সময়ে বস্তু ও হাতের ইশারা শনাক্ত করে বাংলায় বর্ণনা।">
+    <title>Object & Gesture Detector</title>
     <link rel="icon" href="data:,">
     <style>
-        :root {
-            --bg: #0f172a;
-            --surface: #1e293b;
-            --text: #f8fafc;
-            --muted: #cbd5e1;
-            --accent: #38bdf8;
-            --accent-dark: #0284c7;
-            --success: #4ade80;
-            --border: #334155;
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
         }
-
-        * { box-sizing: border-box; }
 
         body {
-            font-family: system-ui, -apple-system, "Segoe UI", "Noto Sans Bengali", sans-serif;
-            margin: 0;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
             min-height: 100vh;
-            background: var(--bg);
-            color: var(--text);
-            line-height: 1.5;
-        }
-
-        .skip-link {
-            position: absolute;
-            left: -9999px;
-            top: 0;
-            background: var(--accent);
-            color: #000;
-            padding: 8px 16px;
-            z-index: 100;
-        }
-
-        .skip-link:focus {
-            left: 16px;
-            top: 16px;
+            background-color: #f4f4f9;
+            padding: 24px;
         }
 
         main {
             max-width: 720px;
-            margin: 0 auto;
-            padding: 24px 16px 48px;
+            width: 100%;
         }
 
         h1 {
-            font-size: clamp(1.5rem, 4vw, 2rem);
-            margin: 0 0 8px;
+            font-size: 28px;
+            margin-bottom: 8px;
+            color: #333;
         }
 
         .subtitle {
-            color: var(--muted);
-            margin: 0 0 24px;
-        }
-
-        .controls {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 12px;
-            margin-bottom: 20px;
-        }
-
-        button {
-            font: inherit;
-            font-weight: 600;
-            border: 2px solid transparent;
-            border-radius: 10px;
-            padding: 14px 20px;
-            cursor: pointer;
-            min-height: 48px;
-        }
-
-        button:focus-visible {
-            outline: 3px solid var(--accent);
-            outline-offset: 2px;
-        }
-
-        .btn-primary {
-            background: var(--accent);
-            color: #082f49;
-        }
-
-        .btn-primary:hover { background: #7dd3fc; }
-
-        .btn-secondary {
-            background: var(--surface);
-            color: var(--text);
-            border-color: var(--border);
-        }
-
-        .btn-danger {
-            background: #7f1d1d;
-            color: #fff;
-        }
-
-        .panel {
-            background: var(--surface);
-            border: 1px solid var(--border);
-            border-radius: 12px;
-            padding: 16px;
-            margin-bottom: 16px;
-        }
-
-        .panel h2 {
-            font-size: 1rem;
-            margin: 0 0 8px;
-        }
-
-        #announcement {
-            font-size: 1.25rem;
-            font-weight: 700;
-            color: var(--success);
-            min-height: 3rem;
-        }
-
-        #status {
-            color: var(--muted);
-            min-height: 1.5rem;
+            color: #666;
+            font-size: 14px;
+            margin-bottom: 24px;
+            text-align: center;
+            line-height: 1.5;
         }
 
         .video-container {
             position: relative;
             width: 100%;
+            max-width: 640px;
             aspect-ratio: 4 / 3;
-            border-radius: 12px;
+            margin: 0 auto 20px;
+            border-radius: 8px;
             overflow: hidden;
             background: #000;
-            border: 1px solid var(--border);
-            margin-bottom: 16px;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.15);
         }
 
         video, canvas {
             position: absolute;
-            inset: 0;
+            top: 0;
+            left: 0;
             width: 100%;
             height: 100%;
-            object-fit: cover;
+            transform: scaleX(-1);
         }
 
-        canvas { pointer-events: none; }
+        canvas {
+            pointer-events: none;
+        }
+
+        .controls {
+            display: flex;
+            gap: 12px;
+            justify-content: center;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+
+        button {
+            padding: 12px 24px;
+            font-size: 16px;
+            font-weight: 600;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        #start-btn {
+            background: #2563eb;
+            color: white;
+        }
+
+        #start-btn:hover:not(:disabled) {
+            background: #1d4ed8;
+        }
+
+        #start-btn:disabled {
+            background: #94a3b8;
+            cursor: not-allowed;
+        }
+
+        #stop-btn {
+            background: #dc2626;
+            color: white;
+        }
+
+        #stop-btn:hover {
+            background: #b91c1c;
+        }
+
+        #scan-btn {
+            background: #7c3aed;
+            color: white;
+        }
+
+        #scan-btn:hover {
+            background: #6d28d9;
+        }
+
+        #mute-btn {
+            background: #6b7280;
+            color: white;
+        }
+
+        #mute-btn:hover {
+            background: #4b5563;
+        }
+
+        .info-panel {
+            background: white;
+            border-radius: 8px;
+            padding: 16px;
+            margin-bottom: 16px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        .info-panel h2 {
+            font-size: 14px;
+            color: #333;
+            margin-bottom: 8px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        #status {
+            font-size: 14px;
+            color: #666;
+            min-height: 20px;
+        }
+
+        #announcement {
+            font-size: 16px;
+            font-weight: 600;
+            color: #16a34a;
+            min-height: 24px;
+        }
 
         #object-list,
         #gesture-list {
-            margin: 8px 0 0;
-            padding-left: 20px;
-            color: var(--muted);
+            list-style: none;
+            font-size: 13px;
+            color: #555;
         }
 
-        .help {
-            font-size: 0.875rem;
-            color: var(--muted);
-            margin-top: 8px;
+        #object-list li,
+        #gesture-list li {
+            padding: 6px 0;
+            border-bottom: 1px solid #e5e7eb;
         }
 
-        [hidden] { display: none !important; }
-
-        @media (prefers-reduced-motion: reduce) {
-            * { scroll-behavior: auto !important; }
+        #object-list li:last-child,
+        #gesture-list li:last-child {
+            border-bottom: none;
         }
     </style>
 </head>
 <body>
-    <a class="skip-link" href="#main-content">মূল বিষয়বস্তুতে যান</a>
-
     <main id="main-content">
-        <h1>দৃষ্টি সহায়ক</h1>
+        <h1>Detector</h1>
         <p class="subtitle">
-            আপনার চারপাশের বস্তু ও হাতের ইশারা সহজ বাংলায় বর্ণনা করে — অন্ধ ও দৃষ্টিপ্রতিবন্ধী ব্যবহারকারীদের জন্য।
-            AI দিয়ে বস্তু শনাক্তকরণ ও হাতের ইশারা চেনা হয়; সব বর্ণনা ব্রাউজারেই তৈরি হয়।
+            Real-time object detection and hand gesture recognition.
         </p>
 
-        <div class="controls" role="toolbar" aria-label="দৃষ্টি সহায়ক নিয়ন্ত্রণ">
-            <button id="start-btn" class="btn-primary" type="button">ক্যামেরা চালু করুন</button>
-            <button id="stop-btn" class="btn-danger" type="button" hidden>ক্যামেরা বন্ধ করুন</button>
-            <button id="scan-btn" class="btn-secondary" type="button" hidden aria-keyshortcuts="Space">
-                এখনই বর্ণনা করুন (Space)
-            </button>
-            <button id="mute-btn" class="btn-secondary" type="button" aria-pressed="false">
-                কথা বন্ধ করুন
-            </button>
+        <div class="video-container">
+            <video id="webcam" autoplay playsinline muted></video>
+            <canvas id="output_canvas"></canvas>
         </div>
 
-        <section class="panel" aria-label="টেক্সট-টু-স্পিচ নির্দেশনা">
-            <div style="display:flex; flex-direction:column; align-items:center; gap:8px; text-align:center;">
-                <span style="font-size:2rem;">📱</span>
-                <div>
-                    <strong>টেক্সট-টু-স্পিচের জন্য এই ওয়েবসাইটটি আপনার অ্যান্ড্রয়েড ফোনে খুলুন।</strong>
-                </div>
-                <div class="help">ফোনে খুললে বাংলা বর্ণনা শোনা যাবে।</div>
-            </div>
-        </section>
+        <div class="controls">
+            <button id="start-btn" type="button">Start Camera</button>
+            <button id="stop-btn" type="button" hidden>Stop Camera</button>
+            <button id="scan-btn" type="button" hidden>Scan Now</button>
+            <button id="mute-btn" type="button">Mute Audio</button>
+        </div>
+
+        <div class="info-panel">
+            <h2>Status</h2>
+            <div id="status">Click Start Camera to begin</div>
+        </div>
+
+        <div class="info-panel">
+            <h2>Detection</h2>
+            <div id="announcement" style="margin-bottom: 12px;"></div>
+            <h3 style="font-size: 12px; color: #999; margin-top: 12px; margin-bottom: 6px;">Objects Detected</h3>
+            <ul id="object-list">
+                <li>None</li>
+            </ul>
+            <h3 style="font-size: 12px; color: #999; margin-top: 12px; margin-bottom: 6px;">Gestures Detected</h3>
+            <ul id="gesture-list">
+                <li>None</li>
+            </ul>
+        </div>
+    </main>
+
+    <script src="app.js" type="module"></script>
+</body>
+</html>
 
         <section class="panel" aria-labelledby="announcement-heading">
             <h2 id="announcement-heading">বর্তমান বর্ণনা</h2>
