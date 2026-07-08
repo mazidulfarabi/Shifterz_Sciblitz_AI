@@ -1,6 +1,7 @@
 import {
     ObjectDetector,
     GestureRecognizer,
+    FaceDetector,
     FilesetResolver
 } from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.8/vision_bundle.mjs";
 
@@ -13,86 +14,23 @@ const SCORE_THRESHOLD = 0.45;
 const MAX_OBJECTS = 8;
 const GESTURE_SCORE_THRESHOLD = 0.6;
 const GESTURE_FRAME_SKIP = 2;
-const SPEECH_LANG = "bn-BD";
-const GOOGLE_TTS_LANG = "bn";
+const FACE_SCORE_THRESHOLD = 0.5;
+const SPEECH_LANG = "en-US";
+const GOOGLE_TTS_LANG = "en";
 const TTS_MODES = {
     AUTO: "auto",
     BROWSER: "browser",
     GOOGLE: "google"
 };
 
-const OBJECT_NAMES_BN = {
-    person: "একজন ব্যক্তি",
-    bicycle: "একটি সাইকেল",
-    car: "একটি গাড়ি",
-    motorcycle: "একটি মোটরসাইকেল",
-    bus: "একটি বাস",
-    train: "একটি ট্রেন",
-    truck: "একটি ট্রাক",
-    boat: "একটি নৌকা",
-    bird: "একটি পাখি",
-    cat: "একটি বিড়াল",
-    dog: "একটি কুকুর",
-    horse: "একটি ঘোড়া",
-    backpack: "একটি ব্যাকপ্যাক",
-    umbrella: "একটি ছাতা",
-    handbag: "একটি হ্যান্ডব্যাগ",
-    tie: "একটি টাই",
-    suitcase: "একটি স্যুটকেস",
-    bottle: "একটি বোতল",
-    cup: "একটি কাপ",
-    fork: "একটি কাঁটাচামচ",
-    knife: "একটি ছুরি",
-    spoon: "একটি চামচ",
-    bowl: "একটি বাটি",
-    banana: "একটি কলা",
-    apple: "একটি আপেল",
-    sandwich: "একটি স্যান্ডউইচ",
-    orange: "একটি কমলা",
-    pizza: "একটি পিজ্জা",
-    donut: "একটি ডোনাট",
-    cake: "একটি কেক",
-    chair: "একটি চেয়ার",
-    couch: "একটি সোফা",
-    "potted plant": "একটি গাছ",
-    bed: "একটি বিছানা",
-    "dining table": "একটি ডাইনিং টেবিল",
-    toilet: "একটি টয়লেট",
-    tv: "একটি টিভি",
-    laptop: "একটি ল্যাপটপ",
-    mouse: "একটি মাউস",
-    remote: "একটি রিমোট",
-    keyboard: "একটি কীবোর্ড",
-    "cell phone": "একটি মোবাইল ফোন",
-    microwave: "একটি মাইক্রোওয়েভ",
-    oven: "একটি ওভেন",
-    refrigerator: "একটি ফ্রিজ",
-    book: "একটি বই",
-    clock: "একটি ঘড়ি",
-    vase: "একটি ফুলদানি",
-    scissors: "একটি কাঁচি",
-    "teddy bear": "একটি টেডি বিয়ার",
-    toothbrush: "একটি টুথব্রাশ"
-};
-
-const GESTURE_NAMES_BN = {
-    Closed_Fist: "মুষ্ঠি",
-    Open_Palm: "খোলা হাত",
-    Pointing_Up: "উপরের দিকে আঙুল",
-    Thumb_Down: "অসম্মতি",
-    Thumb_Up: "সম্মতি",
-    Victory: "বিজয়ের চিহ্ন",
-    ILoveYou: "আই লাভ ইউ ইশারা"
-};
-
-const DEPTH_LABELS_BN = {
+const DEPTH_LABELS = {
     very_near: "very close",
     near: "close",
     medium: "medium distance",
     far: "far"
 };
 
-const HORIZONTAL_LABELS_BN = {
+const HORIZONTAL_LABELS = {
     left: "on your left",
     center: "in front of you",
     right: "on your right"
@@ -106,12 +44,12 @@ const stopBtn = document.getElementById("stop-btn");
 const scanBtn = document.getElementById("scan-btn");
 const statusRegion = document.getElementById("status");
 const announcementRegion = document.getElementById("announcement");
-const objectList = document.getElementById("object-list");
-const gestureList = document.getElementById("gesture-list");
+const gestureOverlay = document.getElementById("gesture-overlay");
 const muteBtn = document.getElementById("mute-btn");
 
 let objectDetector = undefined;
 let gestureRecognizer = undefined;
+let faceDetector = undefined;
 let lastVideoTime = -1;
 let running = false;
 let muted = false;
@@ -121,7 +59,7 @@ let pendingAnnounce = false;
 let cameraStream = null;
 let gestureFrameCounter = 0;
 let lastGestures = [];
-let bnVoice = null;
+let speechVoice = null;
 let speakGeneration = 0;
 let currentAudio = null;
 let speechPrimed = false;
@@ -130,19 +68,16 @@ let speechUserActivated = false;
 let runtimeConfig = {
     intervalSec: DEFAULT_INTERVAL_SEC,
     speechRate: 1,
-    ttsMode: TTS_MODES.GOOGLE
+    ttsMode: TTS_MODES.BROWSER
 };
 
-function refreshBnVoice() {
+function refreshVoice() {
     const voices = window.speechSynthesis?.getVoices() || [];
-    const preferredCodes = ["bn-BD", "bn-IN", "bn"];
-    const preferredVoice = voices.find((voice) => preferredCodes.includes(voice.lang)) ||
-        voices.find((voice) => voice.lang?.startsWith("bn")) ||
-        voices.find((voice) => voice.lang?.startsWith("en")) ||
+    const preferredVoice = voices.find((voice) => voice.lang?.startsWith("en")) ||
         voices[0] ||
         null;
 
-    bnVoice = preferredVoice || null;
+    speechVoice = preferredVoice || null;
 }
 
 function markSpeechActivated() {
@@ -183,10 +118,10 @@ async function ensureSpeechReady() {
 }
 
 function initSpeech() {
-    refreshBnVoice();
+    refreshVoice();
     registerSpeechActivationHandlers();
     if (window.speechSynthesis) {
-        window.speechSynthesis.onvoiceschanged = refreshBnVoice;
+        window.speechSynthesis.onvoiceschanged = refreshVoice;
     }
 }
 
@@ -196,7 +131,7 @@ function primeSpeech() {
     }
 
     speechPrimed = true;
-    refreshBnVoice();
+    refreshVoice();
     markSpeechActivated();
     window.speechSynthesis.resume();
 
@@ -218,7 +153,7 @@ function stopSpeaking() {
 
 function splitSpeechChunks(text, maxLength = 180) {
     const chunks = [];
-    const sentences = text.match(/[^।.!?]+[।.!?]?/g) || [text];
+    const sentences = text.match(/[^.!?]+[.!?]?/g) || [text];
     let current = "";
 
     for (const sentence of sentences) {
@@ -255,7 +190,7 @@ function splitSpeechChunks(text, maxLength = 180) {
 
 function speakWithBrowser(text) {
     return new Promise((resolve) => {
-        refreshBnVoice();
+        refreshVoice();
         markSpeechActivated();
         window.speechSynthesis.resume();
 
@@ -265,8 +200,8 @@ function speakWithBrowser(text) {
         utterance.pitch = 1;
         utterance.volume = 1;
 
-        if (bnVoice) {
-            utterance.voice = bnVoice;
+        if (speechVoice) {
+            utterance.voice = speechVoice;
         }
 
         const timeoutId = window.setTimeout(() => resolve(false), 5000);
@@ -364,7 +299,7 @@ async function speak(text) {
     await ensureSpeechReady();
     stopSpeaking();
     const generation = speakGeneration;
-    refreshBnVoice();
+    refreshVoice();
 
     const mode = runtimeConfig.ttsMode;
     const shouldTryBrowser = Boolean(window.speechSynthesis) && (mode === TTS_MODES.BROWSER || mode === TTS_MODES.AUTO || mode === TTS_MODES.GOOGLE);
@@ -383,7 +318,7 @@ async function speak(text) {
     try {
         await speakWithGoogle(text, generation);
     } catch (err) {
-        console.warn("Bengali TTS failed:", err);
+        console.warn("TTS failed:", err);
     }
 }
 
@@ -396,7 +331,7 @@ async function loadRuntimeConfig() {
     }
 
     runtimeConfig.speechRate = Number(localStorage.getItem(STORAGE_KEY_SPEECH_RATE)) || 1;
-    runtimeConfig.ttsMode = localStorage.getItem(STORAGE_KEY_TTS_MODE) || TTS_MODES.GOOGLE;
+    runtimeConfig.ttsMode = localStorage.getItem(STORAGE_KEY_TTS_MODE) || TTS_MODES.BROWSER;
     syncSettingsForm();
 }
 
@@ -410,6 +345,23 @@ function setStatus(message) {
 
 function setAnnouncement(message) {
     announcementRegion.textContent = message;
+}
+
+function updateGestureOverlay(gestures) {
+    if (!gestureOverlay) {
+        return;
+    }
+
+    if (gestures.length === 0) {
+        gestureOverlay.textContent = "";
+        gestureOverlay.hidden = true;
+        return;
+    }
+
+    gestureOverlay.hidden = false;
+    gestureOverlay.textContent = gestures
+        .map((gesture) => `${gesture.hand}: ${gesture.gesture.replace(/_/g, " ")}`)
+        .join(" | ");
 }
 
 function withTimeout(promise, ms, label) {
@@ -451,6 +403,22 @@ async function loadObjectDetector(vision) {
     );
 }
 
+async function loadFaceDetector(vision) {
+    return withTimeout(
+        FaceDetector.createFromOptions(vision, {
+            baseOptions: {
+                modelAssetPath:
+                    "https://storage.googleapis.com/mediapipe-models/face_detector/blaze_face_short_range/float16/1/blaze_face_short_range.tflite",
+                delegate: "CPU"
+            },
+            runningMode: "VIDEO",
+            minDetectionConfidence: FACE_SCORE_THRESHOLD
+        }),
+        120000,
+        "Face detector model load"
+    );
+}
+
 async function loadGestureRecognizer(vision) {
     return withTimeout(
         GestureRecognizer.createFromOptions(vision, {
@@ -478,7 +446,7 @@ async function startCamera() {
         video: {
             width: { ideal: 640 },
             height: { ideal: 480 },
-            facingMode: "environment"
+            facingMode: { ideal: "user" }
         },
         audio: false
     });
@@ -508,7 +476,7 @@ function stopCamera() {
     stopBtn.hidden = true;
     scanBtn.hidden = true;
     lastGestures = [];
-    renderGestureList([]);
+    updateGestureOverlay([]);
     setStatus("Camera stopped.");
 }
 
@@ -526,30 +494,16 @@ function depthFromArea(area) {
 }
 
 function depthLabel(depth) {
-    return DEPTH_LABELS_BN[depth] || depth;
+    return DEPTH_LABELS[depth] || depth;
 }
 
 function horizontalLabel(horizontal) {
-    return HORIZONTAL_LABELS_BN[horizontal] || horizontal;
+    return HORIZONTAL_LABELS[horizontal] || horizontal;
 }
 
-function objectNameBn(obj) {
-    const key = obj.label.toLowerCase();
-    if (OBJECT_NAMES_BN[key]) {
-        return OBJECT_NAMES_BN[key];
-    }
-
-    const displayKey = obj.display_name.toLowerCase().replace(/_/g, " ");
-    if (OBJECT_NAMES_BN[displayKey]) {
-        return OBJECT_NAMES_BN[displayKey];
-    }
-
-    return "একটি বস্তু";
-}
-
-// Color palette for different objects
 const OBJECT_COLORS = {
     person: "#FF6B6B",
+    face: "#FFD700",
     bicycle: "#4ECDC4",
     car: "#45B7D1",
     motorcycle: "#FFA07A",
@@ -665,6 +619,42 @@ function normalizeDetections(detections) {
         .sort((a, b) => b.confidence - a.confidence);
 }
 
+function detectFaces() {
+    if (!faceDetector || video.readyState < 2) {
+        return [];
+    }
+
+    const results = faceDetector.detectForVideo(video, performance.now());
+    const fw = video.videoWidth || 1;
+    const fh = video.videoHeight || 1;
+
+    return (results.detections || [])
+        .map((detection) => {
+            const category = detection.categories?.[0];
+            if (!category || category.score < FACE_SCORE_THRESHOLD) {
+                return null;
+            }
+
+            const bbox = detection.boundingBox;
+            const position = spatialPosition(bbox, fw, fh);
+
+            return {
+                label: "face",
+                display_name: "Face",
+                confidence: Number(category.score.toFixed(3)),
+                position,
+                bbox: {
+                    x: Number((bbox.originX / fw).toFixed(3)),
+                    y: Number((bbox.originY / fh).toFixed(3)),
+                    width: Number((bbox.width / fw).toFixed(3)),
+                    height: Number((bbox.height / fh).toFixed(3))
+                }
+            };
+        })
+        .filter(Boolean)
+        .sort((a, b) => b.confidence - a.confidence);
+}
+
 function hasPerson(objects) {
     return objects.some((obj) => obj.label.toLowerCase() === "person");
 }
@@ -698,7 +688,6 @@ function detectGestures() {
         gestures.push({
             hand: handLabelFromHandedness(handednessCategory),
             gesture: topGesture.categoryName,
-            gesture_bn: GESTURE_NAMES_BN[topGesture.categoryName] || "অজানা ইশারা",
             confidence: Number(topGesture.score.toFixed(3)),
             horizontal: horizontalZone(centerX),
             center_x: centerX,
@@ -710,9 +699,14 @@ function detectGestures() {
     return gestures;
 }
 
-function sceneSignature(objects, gestures) {
+function sceneSignature(objects, faces, gestures) {
     const objectPart = objects
         .map((obj) => `${obj.label}:${obj.position.horizontal}:${obj.position.depth}`)
+        .sort()
+        .join("|");
+
+    const facePart = faces
+        .map((face) => `${face.label}:${face.position.horizontal}:${face.position.depth}`)
         .sort()
         .join("|");
 
@@ -721,14 +715,14 @@ function sceneSignature(objects, gestures) {
         .sort()
         .join("|");
 
-    return `${objectPart}::${gesturePart}`;
+    return `${objectPart}::${facePart}::${gesturePart}`;
 }
 
-function buildSpatialSentence(objects, gestures) {
+function buildSpatialSentence(objects, faces, gestures) {
     const parts = [];
 
-    if (objects.length === 0 && gestures.length === 0) {
-        return "No detected objects or gestures.";
+    if (objects.length === 0 && faces.length === 0 && gestures.length === 0) {
+        return "No detected objects, faces, or gestures.";
     }
 
     if (objects.length > 0) {
@@ -743,6 +737,19 @@ function buildSpatialSentence(objects, gestures) {
         } else {
             const last = objectParts.pop();
             parts.push(`Detected: ${objectParts.join("; ")}, and ${last}`);
+        }
+    }
+
+    if (faces.length > 0) {
+        const faceParts = faces.slice(0, 3).map((face) => {
+            const where = horizontalLabel(face.position.horizontal);
+            return `Face, ${depthLabel(face.position.depth)}, ${where}`;
+        });
+
+        if (parts.length === 0) {
+            parts.push(`Detected: ${faceParts.join("; ")}`);
+        } else {
+            parts.push(`Also: ${faceParts.join("; ")}`);
         }
     }
 
@@ -762,80 +769,40 @@ function buildSpatialSentence(objects, gestures) {
     return `${parts.join(". ")}.`;
 }
 
-function renderObjectList(objects) {
-    objectList.innerHTML = "";
-
-    if (objects.length === 0) {
-        const item = document.createElement("li");
-        item.textContent = "No objects detected";
-        objectList.appendChild(item);
-        return;
-    }
-
-    objects.forEach((obj) => {
-        const item = document.createElement("li");
-        item.textContent = `${obj.display_name} — ${depthLabel(obj.position.depth)}, ${horizontalLabel(obj.position.horizontal)} (${Math.round(obj.confidence * 100)}%)`;
-        objectList.appendChild(item);
-    });
-}
-
-function renderGestureList(gestures) {
-    if (!gestureList) {
-        return;
-    }
-
-    gestureList.innerHTML = "";
-
-    if (gestures.length === 0) {
-        const item = document.createElement("li");
-        item.textContent = "No gestures detected";
-        gestureList.appendChild(item);
-        return;
-    }
-
-    gestures.forEach((gesture) => {
-        const item = document.createElement("li");
-        item.textContent = `${gesture.hand} — ${gesture.gesture.replace(/_/g, " ")}, ${horizontalLabel(gesture.horizontal)} (${Math.round(gesture.confidence * 100)}%)`;
-        gestureList.appendChild(item);
-    });
-}
-
-function drawDetections(objects, gestures) {
+function drawDetections(objects, faces, gestures) {
     canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
     canvasCtx.lineWidth = 2;
     canvasCtx.font = "12px sans-serif";
 
-    // Draw objects with unique colors per type
-    objects.forEach((obj) => {
-        const x = obj.bbox.x * canvasElement.width;
-        const y = obj.bbox.y * canvasElement.height;
-        const w = obj.bbox.width * canvasElement.width;
-        const h = obj.bbox.height * canvasElement.height;
+    const drawBox = (item) => {
+        const x = item.bbox.x * canvasElement.width;
+        const y = item.bbox.y * canvasElement.height;
+        const w = item.bbox.width * canvasElement.width;
+        const h = item.bbox.height * canvasElement.height;
 
-        const color = getObjectColor(obj.label);
+        const color = getObjectColor(item.label);
         canvasCtx.strokeStyle = color;
         canvasCtx.lineWidth = 2;
         canvasCtx.strokeRect(x, y, w, h);
 
-        // Draw semi-transparent fill
-        canvasCtx.fillStyle = color + "30"; // 30 = ~19% opacity in hex
+        canvasCtx.fillStyle = color + "30";
         canvasCtx.fillRect(x, y, w, h);
 
-        // Draw label
-        const tag = `${obj.display_name} ${Math.round(obj.confidence * 100)}%`;
+        const tag = `${item.display_name} ${Math.round(item.confidence * 100)}%`;
         const textWidth = canvasCtx.measureText(tag).width;
-        
+
         canvasCtx.fillStyle = color;
         canvasCtx.fillRect(x, Math.max(0, y - 20), textWidth + 8, 18);
         canvasCtx.fillStyle = "#fff";
         canvasCtx.fillText(tag, x + 4, Math.max(14, y - 6));
-    });
+    };
 
-    // Draw gesture landmarks (all finger/hand points)
+    objects.forEach(drawBox);
+    faces.forEach(drawBox);
+
     if (gestures.length > 0) {
         gestures.forEach((gesture) => {
             const landmarks = gesture.landmarks || [];
-            // Draw each landmark as a small filled circle
             canvasCtx.fillStyle = "#FF0000";
             canvasCtx.strokeStyle = "#880000";
             landmarks.forEach((lm) => {
@@ -847,7 +814,6 @@ function drawDetections(objects, gestures) {
                 canvasCtx.fill();
             });
 
-            // Optionally draw a slightly larger circle at the wrist/center
             if (typeof gesture.center_x === "number" && typeof gesture.center_y === "number") {
                 const handX = gesture.center_x * canvasElement.width;
                 const handY = gesture.center_y * canvasElement.height;
@@ -861,8 +827,8 @@ function drawDetections(objects, gestures) {
     }
 }
 
-async function announceScene(objects, gestures, force = false) {
-    const signature = sceneSignature(objects, gestures);
+async function announceScene(objects, faces, gestures, force = false) {
+    const signature = sceneSignature(objects, faces, gestures);
     const now = Date.now();
     const intervalMs = runtimeConfig.intervalSec * 1000;
 
@@ -882,22 +848,27 @@ async function announceScene(objects, gestures, force = false) {
     lastAnnounceAt = now;
     pendingAnnounce = true;
 
-    const sentence = buildSpatialSentence(objects, gestures);
+    const sentence = buildSpatialSentence(objects, faces, gestures);
 
     pendingAnnounce = false;
 
     setAnnouncement(sentence);
-    // speak(sentence);
+    speak(sentence);
 
-    if (objects.length === 0 && gestures.length === 0) {
+    if (objects.length === 0 && faces.length === 0 && gestures.length === 0) {
         setStatus("Scanning. No objects detected.");
     } else {
         const objectCount = objects.length;
+        const faceCount = faces.length;
         const gestureCount = gestures.length;
-        let status = `Scanning. ${objectCount} object${objectCount !== 1 ? 's' : ''}`;
+        let status = `Scanning. ${objectCount} object${objectCount !== 1 ? "s" : ""}`;
+
+        if (faceCount > 0) {
+            status += `, ${faceCount} face${faceCount !== 1 ? "s" : ""}`;
+        }
 
         if (gestureCount > 0) {
-            status += `, ${gestureCount} gesture${gestureCount !== 1 ? 's' : ''}`;
+            status += `, ${gestureCount} gesture${gestureCount !== 1 ? "s" : ""}`;
         }
 
         setStatus(`${status} detected.`);
@@ -911,9 +882,10 @@ function processFrame(forceAnnounce = false) {
 
     const results = objectDetector.detectForVideo(video, performance.now());
     const objects = normalizeDetections(results.detections || []);
+    const faces = detectFaces();
 
     let gestures = lastGestures;
-    if (hasPerson(objects)) {
+    if (hasPerson(objects) || faces.length > 0) {
         gestureFrameCounter += 1;
         if (forceAnnounce || gestureFrameCounter % GESTURE_FRAME_SKIP === 0) {
             gestures = detectGestures();
@@ -925,8 +897,9 @@ function processFrame(forceAnnounce = false) {
         lastGestures = [];
     }
 
-    drawDetections(objects, gestures);
-    announceScene(objects, gestures, forceAnnounce);
+    updateGestureOverlay(gestures);
+    drawDetections(objects, faces, gestures);
+    announceScene(objects, faces, gestures, forceAnnounce);
 }
 
 function predictWebcam() {
@@ -959,6 +932,7 @@ async function startApp() {
         setStatus("Camera active. Loading AI models...");
         const vision = await loadVisionTasks();
         objectDetector = await loadObjectDetector(vision);
+        faceDetector = await loadFaceDetector(vision);
         gestureRecognizer = await loadGestureRecognizer(vision);
         running = true;
         startBtn.hidden = true;
@@ -992,7 +966,7 @@ scanBtn.addEventListener("click", () => {
 muteBtn.addEventListener("click", () => {
     muted = !muted;
     muteBtn.setAttribute("aria-pressed", String(muted));
-    muteBtn.textContent = muted ? "কথা চালু করুন" : "কথা বন্ধ করুন";
+    muteBtn.textContent = muted ? "Unmute Audio" : "Mute Audio";
     if (muted) {
         stopSpeaking();
     }

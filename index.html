@@ -66,6 +66,26 @@
             pointer-events: none;
         }
 
+        .gesture-overlay {
+            position: absolute;
+            top: 8px;
+            left: 8px;
+            z-index: 10;
+            background: rgba(0, 0, 0, 0.75);
+            color: #fff;
+            padding: 8px 12px;
+            border-radius: 6px;
+            font-size: 14px;
+            font-weight: 600;
+            pointer-events: none;
+            max-width: calc(100% - 16px);
+            line-height: 1.4;
+        }
+
+        .gesture-overlay[hidden] {
+            display: none;
+        }
+
         .controls {
             display: flex;
             gap: 12px;
@@ -154,41 +174,19 @@
             min-height: 24px;
         }
 
-        #object-list,
-        #gesture-list {
-            list-style: none;
-            font-size: 13px;
-            color: #555;
-        }
-
-        /* Hide detailed lists - announcements are sufficient */
-        #object-list,
-        #gesture-list {
-            display: none;
-        }
-
-        #object-list li,
-        #gesture-list li {
-            padding: 6px 0;
-            border-bottom: 1px solid #e5e7eb;
-        }
-
-        #object-list li:last-child,
-        #gesture-list li:last-child {
-            border-bottom: none;
-        }
     </style>
 </head>
 <body>
     <main id="main-content">
         <h1>Detector</h1>
         <p class="subtitle">
-            Real-time object detection and hand gesture recognition.
+            Real-time object, face, and hand gesture detection with spoken descriptions.
         </p>
 
         <div class="video-container">
             <video id="webcam" autoplay playsinline muted></video>
             <canvas id="output_canvas"></canvas>
+            <div id="gesture-overlay" class="gesture-overlay" hidden></div>
         </div>
 
         <div class="controls">
@@ -205,15 +203,7 @@
 
         <div class="info-panel">
             <h2>Detection</h2>
-            <div id="announcement" style="margin-bottom: 12px;"></div>
-            <h3 style="font-size: 12px; color: #999; margin-top: 12px; margin-bottom: 6px;">Objects Detected</h3>
-            <ul id="object-list">
-                <li>None</li>
-            </ul>
-            <h3 style="font-size: 12px; color: #999; margin-top: 12px; margin-bottom: 6px;">Gestures Detected</h3>
-            <ul id="gesture-list">
-                <li>None</li>
-            </ul>
+            <div id="announcement"></div>
         </div>
     </main>
 
