@@ -6,66 +6,101 @@
     <title>Hand Gesture Detector</title>
     <link rel="icon" href="data:,">
     <style>
+        :root {
+            color-scheme: light;
+        }
+
         body {
-            font-family: sans-serif;
+            font-family: Arial, Helvetica, sans-serif;
             display: flex;
             flex-direction: column;
             align-items: center;
             justify-content: center;
             min-height: 100vh;
             margin: 0;
-            background-color: #f4f4f9;
+            background: #f4f4f9;
             padding: 24px;
             box-sizing: border-box;
+            color: #222;
         }
-        h1 { margin-bottom: 8px; }
+
+        h1 {
+            margin: 0 0 8px;
+            font-size: 32px;
+            font-weight: 700;
+        }
+
         .subtitle {
             margin: 0 0 20px;
             color: #555;
             text-align: center;
             max-width: 640px;
+            line-height: 1.5;
         }
+
         .video-container {
             position: relative;
             width: 640px;
             max-width: 100%;
             height: 480px;
-            box-shadow: 0 4px 10px rgba(0,0,0,0.15);
-            border-radius: 8px;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.16);
+            border-radius: 12px;
             overflow: hidden;
             background: #000;
+            border: 2px solid #e5e7eb;
         }
+
         video, canvas {
             position: absolute;
-            top: 0;
-            left: 0;
+            inset: 0;
             width: 100%;
             height: 100%;
             transform: scaleX(-1);
         }
+
         #start-btn {
             margin-top: 20px;
             padding: 12px 28px;
             font-size: 18px;
-            font-weight: bold;
+            font-weight: 700;
             color: #fff;
             background: #2563eb;
             border: none;
-            border-radius: 8px;
+            border-radius: 999px;
             cursor: pointer;
+            box-shadow: 0 4px 12px rgba(37, 99, 235, 0.25);
         }
+
         #start-btn:disabled {
             background: #94a3b8;
             cursor: not-allowed;
+            box-shadow: none;
         }
+
         #output {
             margin-top: 16px;
             font-size: 20px;
-            font-weight: bold;
+            font-weight: 700;
             color: #333;
             min-height: 36px;
             text-align: center;
         }
+
+        #debug-output {
+            margin-top: 14px;
+            width: 100%;
+            max-width: 640px;
+            white-space: pre-wrap;
+            word-break: break-word;
+            background: #111827;
+            color: #f9fafb;
+            padding: 12px;
+            border-radius: 10px;
+            font-size: 12px;
+            min-height: 84px;
+            box-shadow: inset 0 1px 2px rgba(255,255,255,0.08);
+        }
+
         #supported-gestures {
             margin-top: 12px;
             font-size: 14px;
@@ -77,10 +112,10 @@
     </style>
 </head>
 <body>
-    <h1>Hand Gesture Detector</h1>
+    <h1>Sign Language Detector</h1>
     <p class="subtitle">
-        Real-time webcam detection using a Roboflow model through a Netlify function. This sends live frames
-        to the hosted model and shows the strongest prediction with a box overlay.
+        Real-time sign language recognition using a Roboflow classification model through a Netlify function.
+        Point your hand toward the camera and watch the label update live.
     </p>
     <div class="video-container">
         <video id="webcam" autoplay playsinline muted></video>
@@ -88,7 +123,7 @@
     </div>
     <button id="start-btn" type="button">Start Camera</button>
     <div id="output">Click Start Camera to begin.</div>
-    <pre id="debug-output" style="margin-top: 12px; width: 100%; max-width: 640px; white-space: pre-wrap; word-break: break-word; background: #111827; color: #f9fafb; padding: 12px; border-radius: 8px; font-size: 12px; min-height: 80px;">Waiting for inference output...</pre>
+    <pre id="debug-output">Waiting for inference output...</pre>
     <div id="supported-gestures">
         This uses the Roboflow model "sign-language-words-wenlz/1". Make sure the Netlify function has the ROBOFLOW_API_KEY environment variable configured.
     </div>

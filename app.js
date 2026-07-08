@@ -52,11 +52,18 @@ function drawPredictions(predictions) {
     const boxWidth = width * scaleX;
     const boxHeight = height * scaleY;
 
-    canvasCtx.strokeStyle = "#22c55e";
+    canvasCtx.strokeStyle = "#ef4444";
     canvasCtx.lineWidth = 3;
     canvasCtx.strokeRect(left, top, boxWidth, boxHeight);
 
-    canvasCtx.fillStyle = "#22c55e";
+    canvasCtx.beginPath();
+    canvasCtx.moveTo(left + boxWidth * 0.2, top + boxHeight * 0.2);
+    canvasCtx.lineTo(left + boxWidth * 0.8, top + boxHeight * 0.8);
+    canvasCtx.strokeStyle = "#ef4444";
+    canvasCtx.lineWidth = 4;
+    canvasCtx.stroke();
+
+    canvasCtx.fillStyle = "#ef4444";
     canvasCtx.font = "16px sans-serif";
     canvasCtx.fillText(`${prediction.class_name || prediction.className || "Object"} ${(prediction.confidence * 100).toFixed(0)}%`, left, Math.max(top - 8, 10));
   });
