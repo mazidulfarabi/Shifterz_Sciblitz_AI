@@ -8,13 +8,13 @@ The goal is not to replace a cane, guide dog, or human assistant — but to give
 
 > *"Can computer vision bridge the gap for people who cannot see clearly by interpreting the world around them in real time?"*
 >
-> This project follows the same spirit as accessibility-focused computer vision work — such as [Roboflow's research on American Sign Language recognition](https://blog.roboflow.com/computer-vision-american-sign-language/) — where machine learning is applied not as a demo, but as a practical tool for communities that need it.
+> This project follows the same spirit as accessibility-focused computer vision work where machine learning is applied not as a demo, but as a practical tool for communities that need it.
 
 ---
 
 ## Why This Exists
 
-For someone with low or no vision, simple tasks carry friction that sighted users rarely think about:
+For people who are fully blind, have blurred vision or are partially blind (Glaucoma, Retinitis Pigmentosa (RP), Leber Hereditary Optic Neuropathy (LHON), Choroideremia, Cataracts, Diabetic Retinopathy, Age-Related Macular Degeneration (AMD), Stargardt Disease) simple tasks carry friction that sighted users rarely think about:
 
 - **Locating objects** — *Where is the bottle? Is the phone on my left or in front of me?*
 - **Understanding people nearby** — *Is someone facing me? Are they trying to get my attention?*
@@ -25,7 +25,7 @@ Spatial Vision Assistant addresses these by running **multiple vision models in 
 
 > *"There's a person in front of you, yawning and showing a thumbs up. There's also a cell phone and a bottle in front of you."*
 
-The user hears this through speakers or headphones. They do not need to read the screen. The interface is deliberately minimal: large buttons, a status line, and an optional on-screen transcript for caregivers or low-vision users who can still read.
+**The user hears this through speakers or headphones.** They do not need to read the screen. Someone just has to open this website for them in a camera-phone. The interface is deliberately minimal: large buttons, a status line, and an optional on-screen transcript for caregivers or low-vision users who can still read.
 
 ---
 
@@ -120,7 +120,7 @@ Every vision model begins with **raw images or video frames**. In a training pip
 
 ### Stage 2 — Labeling & Class Definition
 
-Each image is **annotated** with bounding boxes (for objects) or landmark points (for faces and hands). Every region is assigned a **class name** — e.g. `person`, `bottle`, `Thumb_Up`, `Victory`. This supervised labeling step is what teaches the model *what* to look for. Tools like **Roboflow** and **Teachable Machine** exist precisely to streamline this: upload images, draw boxes, name classes, and export a training-ready dataset.
+Each image is **annotated** with bounding boxes (for objects) or landmark points (for faces and hands). Every region is assigned a **class name** — e.g. `person`, `bottle`, `Thumbs_Up`, `Open_palm`, `Victory_sign`, `yawning`, `eyes_closed`. This supervised labeling step is what teaches the model *what* to look for. Tools like **Roboflow** and **Teachable Machine** exist precisely to streamline this: upload images, draw boxes, name classes, and export a training-ready dataset. [How Labeling is Done](https://youtu.be/a3SBRtILjPI?si=ItP6YIck2pg4oKR3/)
 
 ### Stage 3 — Data Augmentation
 
@@ -131,7 +131,7 @@ Real-world datasets are rarely large enough on their own. Before training, image
 - **Brightness**, **contrast**, and **blur** adjustments
 - **Crop** and **scale** changes
 
-Roboflow documents this process extensively: a few hundred original photos can expand to **tens of thousands** of training samples through controlled warping and oversampling — dramatically improving model robustness without collecting new data in the field.
+A few hundred original photos can expand to **tens of thousands** of training samples through controlled warping and oversampling — dramatically improving model robustness without collecting new data in the field.
 
 ### Stage 4 — Model Training (Supervised Machine Learning)
 
@@ -161,7 +161,7 @@ Camera frame
     → Web Speech API (spoken output)
 ```
 
-All inference runs **client-side in the browser**. No images are uploaded to a server. No account is required. Privacy is preserved by design.
+All inference runs **server-less with Netlify**. No images are uploaded to a server. Which makes this super-fast. No account creation is required. Privacy is preserved by design.
 
 The spatial reasoning layer is custom engineering: it converts normalized bounding-box coordinates into human-readable location phrases, merges person detections with face analyses to avoid redundancy, groups co-located objects into single clauses, and rate-limits announcements so the user is not flooded with repetition.
 
@@ -303,6 +303,5 @@ The models above were produced through standard supervised ML workflows. This pr
 
 - **MediaPipe** is provided by Google under the [Apache License 2.0](https://www.apache.org/licenses/LICENSE-2.0).
 - **COCO** dataset and annotations are used under the [Creative Commons Attribution 4.0 License](https://creativecommons.org/licenses/by/4.0/).
-- Model weights are **not retrained in this repository**; this application deploys Google's published inference models and adds a custom spatial-reasoning and natural-language layer on top.
 
 If this work is useful to you, share it with organizations serving blind, low-vision, and deaf-blind communities — and contribute improvements via the repository.
