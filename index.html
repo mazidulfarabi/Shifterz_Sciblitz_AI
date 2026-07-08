@@ -1,97 +1,232 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="bn" translate="no">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Hand Gesture Detector</title>
+    <meta name="google" content="notranslate">
+    <title>দৃষ্টি সহায়ক</title>
+    <meta name="description" content="অন্ধ ও দৃষ্টিপ্রতিবন্ধী ব্যবহারকারীদের জন্য বাস্তব সময়ে বস্তু ও হাতের ইশারা শনাক্ত করে বাংলায় বর্ণনা।">
     <link rel="icon" href="data:,">
     <style>
+        :root {
+            --bg: #0f172a;
+            --surface: #1e293b;
+            --text: #f8fafc;
+            --muted: #cbd5e1;
+            --accent: #38bdf8;
+            --accent-dark: #0284c7;
+            --success: #4ade80;
+            --border: #334155;
+        }
+
+        * { box-sizing: border-box; }
+
         body {
-            font-family: sans-serif;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            min-height: 100vh;
+            font-family: system-ui, -apple-system, "Segoe UI", "Noto Sans Bengali", sans-serif;
             margin: 0;
-            background-color: #f4f4f9;
-            padding: 24px;
-            box-sizing: border-box;
+            min-height: 100vh;
+            background: var(--bg);
+            color: var(--text);
+            line-height: 1.5;
         }
-        h1 { margin-bottom: 8px; }
+
+        .skip-link {
+            position: absolute;
+            left: -9999px;
+            top: 0;
+            background: var(--accent);
+            color: #000;
+            padding: 8px 16px;
+            z-index: 100;
+        }
+
+        .skip-link:focus {
+            left: 16px;
+            top: 16px;
+        }
+
+        main {
+            max-width: 720px;
+            margin: 0 auto;
+            padding: 24px 16px 48px;
+        }
+
+        h1 {
+            font-size: clamp(1.5rem, 4vw, 2rem);
+            margin: 0 0 8px;
+        }
+
         .subtitle {
-            margin: 0 0 20px;
-            color: #555;
-            text-align: center;
-            max-width: 640px;
+            color: var(--muted);
+            margin: 0 0 24px;
         }
+
+        .controls {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px;
+            margin-bottom: 20px;
+        }
+
+        button {
+            font: inherit;
+            font-weight: 600;
+            border: 2px solid transparent;
+            border-radius: 10px;
+            padding: 14px 20px;
+            cursor: pointer;
+            min-height: 48px;
+        }
+
+        button:focus-visible {
+            outline: 3px solid var(--accent);
+            outline-offset: 2px;
+        }
+
+        .btn-primary {
+            background: var(--accent);
+            color: #082f49;
+        }
+
+        .btn-primary:hover { background: #7dd3fc; }
+
+        .btn-secondary {
+            background: var(--surface);
+            color: var(--text);
+            border-color: var(--border);
+        }
+
+        .btn-danger {
+            background: #7f1d1d;
+            color: #fff;
+        }
+
+        .panel {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 16px;
+            margin-bottom: 16px;
+        }
+
+        .panel h2 {
+            font-size: 1rem;
+            margin: 0 0 8px;
+        }
+
+        #announcement {
+            font-size: 1.25rem;
+            font-weight: 700;
+            color: var(--success);
+            min-height: 3rem;
+        }
+
+        #status {
+            color: var(--muted);
+            min-height: 1.5rem;
+        }
+
         .video-container {
             position: relative;
-            width: 640px;
-            max-width: 100%;
-            height: 480px;
-            box-shadow: 0 4px 10px rgba(0,0,0,0.15);
-            border-radius: 8px;
+            width: 100%;
+            aspect-ratio: 4 / 3;
+            border-radius: 12px;
             overflow: hidden;
             background: #000;
+            border: 1px solid var(--border);
+            margin-bottom: 16px;
         }
+
         video, canvas {
             position: absolute;
-            top: 0;
-            left: 0;
+            inset: 0;
             width: 100%;
             height: 100%;
-            transform: scaleX(-1);
+            object-fit: cover;
         }
-        #start-btn {
-            margin-top: 20px;
-            padding: 12px 28px;
-            font-size: 18px;
-            font-weight: bold;
-            color: #fff;
-            background: #2563eb;
-            border: none;
-            border-radius: 8px;
-            cursor: pointer;
+
+        canvas { pointer-events: none; }
+
+        #object-list,
+        #gesture-list {
+            margin: 8px 0 0;
+            padding-left: 20px;
+            color: var(--muted);
         }
-        #start-btn:disabled {
-            background: #94a3b8;
-            cursor: not-allowed;
+
+        .help {
+            font-size: 0.875rem;
+            color: var(--muted);
+            margin-top: 8px;
         }
-        #output {
-            margin-top: 16px;
-            font-size: 20px;
-            font-weight: bold;
-            color: #333;
-            min-height: 36px;
-            text-align: center;
-        }
-        #supported-gestures {
-            margin-top: 12px;
-            font-size: 14px;
-            color: #666;
-            text-align: center;
-            max-width: 640px;
-            line-height: 1.5;
+
+        [hidden] { display: none !important; }
+
+        @media (prefers-reduced-motion: reduce) {
+            * { scroll-behavior: auto !important; }
         }
     </style>
 </head>
 <body>
-    <h1>Hand Gesture Detector</h1>
-    <p class="subtitle">
-        Real-time webcam detection using a Roboflow model through a Netlify function. This sends live frames
-        to the hosted model and shows the strongest prediction with a box overlay.
-    </p>
-    <div class="video-container">
-        <video id="webcam" autoplay playsinline muted></video>
-        <canvas id="output_canvas"></canvas>
-    </div>
-    <button id="start-btn" type="button">Start Camera</button>
-    <div id="output">Click Start Camera to begin.</div>
-    <pre id="debug-output" style="margin-top: 12px; width: 100%; max-width: 640px; white-space: pre-wrap; word-break: break-word; background: #111827; color: #f9fafb; padding: 12px; border-radius: 8px; font-size: 12px; min-height: 80px;">Waiting for inference output...</pre>
-    <div id="supported-gestures">
-        This uses the Roboflow model "american-sign-language-letters/6". Make sure the Netlify function has the ROBOFLOW_API_KEY environment variable configured.
-    </div>
+    <a class="skip-link" href="#main-content">মূল বিষয়বস্তুতে যান</a>
+
+    <main id="main-content">
+        <h1>দৃষ্টি সহায়ক</h1>
+        <p class="subtitle">
+            আপনার চারপাশের বস্তু ও হাতের ইশারা সহজ বাংলায় বর্ণনা করে — অন্ধ ও দৃষ্টিপ্রতিবন্ধী ব্যবহারকারীদের জন্য।
+            AI দিয়ে বস্তু শনাক্তকরণ ও হাতের ইশারা চেনা হয়; সব বর্ণনা ব্রাউজারেই তৈরি হয়।
+        </p>
+
+        <div class="controls" role="toolbar" aria-label="দৃষ্টি সহায়ক নিয়ন্ত্রণ">
+            <button id="start-btn" class="btn-primary" type="button">ক্যামেরা চালু করুন</button>
+            <button id="stop-btn" class="btn-danger" type="button" hidden>ক্যামেরা বন্ধ করুন</button>
+            <button id="scan-btn" class="btn-secondary" type="button" hidden aria-keyshortcuts="Space">
+                এখনই বর্ণনা করুন (Space)
+            </button>
+            <button id="mute-btn" class="btn-secondary" type="button" aria-pressed="false">
+                কথা বন্ধ করুন
+            </button>
+        </div>
+
+        <section class="panel" aria-label="টেক্সট-টু-স্পিচ নির্দেশনা">
+            <div style="display:flex; flex-direction:column; align-items:center; gap:8px; text-align:center;">
+                <span style="font-size:2rem;">📱</span>
+                <div>
+                    <strong>টেক্সট-টু-স্পিচের জন্য এই ওয়েবসাইটটি আপনার অ্যান্ড্রয়েড ফোনে খুলুন।</strong>
+                </div>
+                <div class="help">ফোনে খুললে বাংলা বর্ণনা শোনা যাবে।</div>
+            </div>
+        </section>
+
+        <section class="panel" aria-labelledby="announcement-heading">
+            <h2 id="announcement-heading">বর্তমান বর্ণনা</h2>
+            <div id="announcement" role="status" aria-live="assertive" aria-atomic="true" translate="no">
+                শুরু করতে ক্যামেরা চালু করুন চাপুন।
+            </div>
+            <p id="status" aria-live="polite"></p>
+        </section>
+
+        <div class="video-container" aria-hidden="true">
+            <video id="webcam" autoplay playsinline muted></video>
+            <canvas id="output_canvas"></canvas>
+        </div>
+
+        <section class="panel" aria-labelledby="objects-heading">
+            <h2 id="objects-heading">শনাক্ত বস্তু</h2>
+            <ul id="object-list">
+                <li>ক্যামেরার জন্য অপেক্ষা...</li>
+            </ul>
+        </section>
+
+        <section class="panel" aria-labelledby="gestures-heading">
+            <h2 id="gestures-heading">হাতের ইশারা</h2>
+            <p class="help">ব্যক্তি শনাক্ত হলে AI হাতের ইশারা চেনে (মুষ্ঠি, খোলা হাত, থাম্বস আপ ইত্যাদি)।</p>
+            <ul id="gesture-list">
+                <li>ব্যক্তি শনাক্ত হলে ইশারা দেখাবে</li>
+            </ul>
+        </section>
+
+    </main>
 
     <script src="app.js" type="module"></script>
 </body>
