@@ -1,7 +1,7 @@
 import {
     ObjectDetector,
     GestureRecognizer,
-    FaceDetector,
+    FaceLandmarker,
     FilesetResolver
 } from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.8/vision_bundle.mjs";
 
@@ -15,6 +15,11 @@ const MAX_OBJECTS = 8;
 const GESTURE_SCORE_THRESHOLD = 0.6;
 const GESTURE_FRAME_SKIP = 2;
 const FACE_SCORE_THRESHOLD = 0.5;
+const YAWN_JAW_OPEN_THRESHOLD = 0.45;
+const SMILE_THRESHOLD = 0.4;
+const FROWN_THRESHOLD = 0.35;
+const EYE_CLOSED_THRESHOLD = 0.5;
+const SURPRISE_BROW_THRESHOLD = 0.4;
 const SPEECH_LANG = "en-US";
 const GOOGLE_TTS_LANG = "en";
 const TTS_MODES = {
@@ -49,7 +54,7 @@ const muteBtn = document.getElementById("mute-btn");
 
 let objectDetector = undefined;
 let gestureRecognizer = undefined;
-let faceDetector = undefined;
+let faceLandmarker = undefined;
 let lastVideoTime = -1;
 let running = false;
 let muted = false;
@@ -347,21 +352,31 @@ function setAnnouncement(message) {
     announcementRegion.textContent = message;
 }
 
-function updateGestureOverlay(gestures) {
+function updateGestureOverlay(gestures, faceAnalyses = []) {
     if (!gestureOverlay) {
         return;
     }
 
-    if (gestures.length === 0) {
+    const lines = [];
+
+    faceAnalyses.forEach((face) => {
+        if (face.expressions.length > 0) {
+            lines.push(face.expressions.map(capitalizeFirst).join(", "));
+        }
+    });
+
+    gestures.forEach((gesture) => {
+        lines.push(`${gesture.hand}: ${gesture.gesture.replace(/_/g, " ")}`);
+    });
+
+    if (lines.length === 0) {
         gestureOverlay.textContent = "";
         gestureOverlay.hidden = true;
         return;
     }
 
     gestureOverlay.hidden = false;
-    gestureOverlay.textContent = gestures
-        .map((gesture) => `${gesture.hand}: ${gesture.gesture.replace(/_/g, " ")}`)
-        .join(" | ");
+    gestureOverlay.textContent = lines.join(" | ");
 }
 
 function withTimeout(promise, ms, label) {
@@ -403,19 +418,21 @@ async function loadObjectDetector(vision) {
     );
 }
 
-async function loadFaceDetector(vision) {
+async function loadFaceLandmarker(vision) {
     return withTimeout(
-        FaceDetector.createFromOptions(vision, {
+        FaceLandmarker.createFromOptions(vision, {
             baseOptions: {
                 modelAssetPath:
-                    "https://storage.googleapis.com/mediapipe-models/face_detector/blaze_face_short_range/float16/1/blaze_face_short_range.tflite",
+                    "https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task",
                 delegate: "CPU"
             },
             runningMode: "VIDEO",
-            minDetectionConfidence: FACE_SCORE_THRESHOLD
+            numFaces: 2,
+            outputFaceBlendshapes: true,
+            minFaceDetectionConfidence: FACE_SCORE_THRESHOLD
         }),
         120000,
-        "Face detector model load"
+        "Face landmarker model load"
     );
 }
 
@@ -619,44 +636,305 @@ function normalizeDetections(detections) {
         .sort((a, b) => b.confidence - a.confidence);
 }
 
-function detectFaces() {
-    if (!faceDetector || video.readyState < 2) {
+function capitalizeFirst(text) {
+    if (!text) {
+        return text;
+    }
+    return text.charAt(0).toUpperCase() + text.slice(1);
+}
+
+function blendshapeScores(blendshapes) {
+    const scores = {};
+    (blendshapes?.categories || []).forEach((category) => {
+        scores[category.categoryName] = category.score;
+    });
+    return scores;
+}
+
+function extractExpressions(blendshapes) {
+    const scores = blendshapeScores(blendshapes);
+    const expressions = [];
+
+    const jawOpen = scores.jawOpen || 0;
+    const mouthSmile = ((scores.mouthSmileLeft || 0) + (scores.mouthSmileRight || 0)) / 2;
+    const mouthFrown = ((scores.mouthFrownLeft || 0) + (scores.mouthFrownRight || 0)) / 2;
+    const eyeBlinkLeft = scores.eyeBlinkLeft || 0;
+    const eyeBlinkRight = scores.eyeBlinkRight || 0;
+    const browInnerUp = scores.browInnerUp || 0;
+    const eyeWideLeft = scores.eyeWideLeft || 0;
+    const eyeWideRight = scores.eyeWideRight || 0;
+    const cheekPuff = scores.cheekPuff || 0;
+
+    if (jawOpen >= YAWN_JAW_OPEN_THRESHOLD) {
+        expressions.push("yawning");
+    }
+
+    if (mouthSmile >= SMILE_THRESHOLD && jawOpen < YAWN_JAW_OPEN_THRESHOLD) {
+        expressions.push("smiling");
+    }
+
+    if (mouthFrown >= FROWN_THRESHOLD) {
+        expressions.push("frowning");
+    }
+
+    if (eyeBlinkLeft >= EYE_CLOSED_THRESHOLD && eyeBlinkRight >= EYE_CLOSED_THRESHOLD) {
+        expressions.push("eyes closed");
+    }
+
+    if (browInnerUp >= SURPRISE_BROW_THRESHOLD && eyeWideLeft > 0.25 && eyeWideRight > 0.25) {
+        expressions.push("looking surprised");
+    }
+
+    if (cheekPuff >= 0.4) {
+        expressions.push("puffing cheeks");
+    }
+
+    return expressions;
+}
+
+function landmarkBoundingBox(landmarks, frameWidth, frameHeight) {
+    let minX = 1;
+    let minY = 1;
+    let maxX = 0;
+    let maxY = 0;
+
+    landmarks.forEach((landmark) => {
+        minX = Math.min(minX, landmark.x);
+        minY = Math.min(minY, landmark.y);
+        maxX = Math.max(maxX, landmark.x);
+        maxY = Math.max(maxY, landmark.y);
+    });
+
+    return {
+        originX: minX * frameWidth,
+        originY: minY * frameHeight,
+        width: (maxX - minX) * frameWidth,
+        height: (maxY - minY) * frameHeight
+    };
+}
+
+function analyzeFaces() {
+    if (!faceLandmarker || video.readyState < 2) {
         return [];
     }
 
-    const results = faceDetector.detectForVideo(video, performance.now());
+    const results = faceLandmarker.detectForVideo(video, performance.now());
     const fw = video.videoWidth || 1;
     const fh = video.videoHeight || 1;
+    const analyses = [];
 
-    return (results.detections || [])
-        .map((detection) => {
-            const category = detection.categories?.[0];
-            if (!category || category.score < FACE_SCORE_THRESHOLD) {
-                return null;
+    (results.faceLandmarks || []).forEach((landmarks, index) => {
+        if (!landmarks?.length) {
+            return;
+        }
+
+        const bbox = landmarkBoundingBox(landmarks, fw, fh);
+        const position = spatialPosition(bbox, fw, fh);
+        const expressions = extractExpressions(results.faceBlendshapes?.[index]);
+
+        analyses.push({
+            label: "face",
+            display_name: "Face",
+            confidence: 1,
+            position,
+            expressions,
+            landmarks,
+            bbox: {
+                x: Number((bbox.originX / fw).toFixed(3)),
+                y: Number((bbox.originY / fh).toFixed(3)),
+                width: Number((bbox.width / fw).toFixed(3)),
+                height: Number((bbox.height / fh).toFixed(3))
             }
+        });
+    });
 
-            const bbox = detection.boundingBox;
-            const position = spatialPosition(bbox, fw, fh);
-
-            return {
-                label: "face",
-                display_name: "Face",
-                confidence: Number(category.score.toFixed(3)),
-                position,
-                bbox: {
-                    x: Number((bbox.originX / fw).toFixed(3)),
-                    y: Number((bbox.originY / fh).toFixed(3)),
-                    width: Number((bbox.width / fw).toFixed(3)),
-                    height: Number((bbox.height / fh).toFixed(3))
-                }
-            };
-        })
-        .filter(Boolean)
-        .sort((a, b) => b.confidence - a.confidence);
+    return analyses.sort((a, b) => b.position.area - a.position.area);
 }
 
-function hasPerson(objects) {
-    return objects.some((obj) => obj.label.toLowerCase() === "person");
+function hasPerson(objects, faceAnalyses) {
+    return objects.some((obj) => obj.label.toLowerCase() === "person") || faceAnalyses.length > 0;
+}
+
+function formatGesturePhrase(gestureName) {
+    const phrases = {
+        Thumb_Up: "showing a thumbs up",
+        Thumb_Down: "showing a thumbs down",
+        Open_Palm: "showing an open palm",
+        Closed_Fist: "making a fist",
+        Victory: "showing a peace sign",
+        Pointing_Up: "pointing up",
+        ILoveYou: "showing an I love you sign"
+    };
+
+    return phrases[gestureName] || `showing ${gestureName.replace(/_/g, " ").toLowerCase()}`;
+}
+
+function joinNaturalList(items) {
+    if (items.length === 0) {
+        return "";
+    }
+    if (items.length === 1) {
+        return items[0];
+    }
+    if (items.length === 2) {
+        return `${items[0]} and ${items[1]}`;
+    }
+    return `${items.slice(0, -1).join(", ")}, and ${items[items.length - 1]}`;
+}
+
+function personLocationPhrase(position) {
+    const { horizontal, depth } = position;
+
+    if (horizontal === "center") {
+        if (depth === "very_near" || depth === "near") {
+            return "in front of you";
+        }
+        if (depth === "far") {
+            return "far in front of you";
+        }
+        return `${depthLabel(depth)} in front of you`;
+    }
+
+    if (depth === "medium") {
+        return horizontalLabel(horizontal);
+    }
+
+    return `${depthLabel(depth)} ${horizontalLabel(horizontal)}`;
+}
+
+function objectLocationPhrase(position) {
+    const { horizontal, depth } = position;
+
+    if (horizontal === "center") {
+        if (depth === "very_near" || depth === "near") {
+            return "in front of you";
+        }
+        if (depth === "far") {
+            return "far in front of you";
+        }
+        return `${depthLabel(depth)} in front of you`;
+    }
+
+    if (depth === "medium") {
+        return horizontalLabel(horizontal);
+    }
+
+    return `${depthLabel(depth)} ${horizontalLabel(horizontal)}`;
+}
+
+function articleFor(noun) {
+    return /^[aeiou]/i.test(noun) ? "an" : "a";
+}
+
+function getPrimaryPersonPosition(personObjects, faceAnalyses) {
+    if (personObjects.length > 0) {
+        return personObjects.reduce((best, current) =>
+            (current.position.area > best.position.area ? current : best)
+        ).position;
+    }
+
+    if (faceAnalyses.length > 0) {
+        return faceAnalyses[0].position;
+    }
+
+    return null;
+}
+
+function countPeople(personObjects, faceAnalyses) {
+    if (personObjects.length === 0 && faceAnalyses.length === 0) {
+        return 0;
+    }
+
+    if (faceAnalyses.length > 0) {
+        return faceAnalyses.length;
+    }
+
+    return personObjects.length;
+}
+
+function buildPersonDescription(personObjects, faceAnalyses, gestures) {
+    const peopleCount = countPeople(personObjects, faceAnalyses);
+    const position = getPrimaryPersonPosition(personObjects, faceAnalyses);
+
+    if (!position || peopleCount === 0) {
+        return "";
+    }
+
+    const traits = [];
+    const seenExpressions = new Set();
+
+    faceAnalyses.forEach((face) => {
+        face.expressions.forEach((expression) => {
+            if (!seenExpressions.has(expression)) {
+                seenExpressions.add(expression);
+                traits.push(expression);
+            }
+        });
+    });
+
+    const seenGestures = new Set();
+    gestures.forEach((gesture) => {
+        const phrase = formatGesturePhrase(gesture.gesture);
+        if (!seenGestures.has(phrase)) {
+            seenGestures.add(phrase);
+            traits.push(phrase);
+        }
+    });
+
+    const location = personLocationPhrase(position);
+    const personLabel = peopleCount === 1 ? "a person" : `${peopleCount} people`;
+    let sentence = `There's ${personLabel} ${location}`;
+
+    if (traits.length > 0) {
+        sentence += `, ${joinNaturalList(traits)}`;
+    }
+
+    return sentence;
+}
+
+function buildObjectDescriptions(objects) {
+    if (objects.length === 0) {
+        return [];
+    }
+
+    const grouped = new Map();
+
+    objects.forEach((obj) => {
+        const key = `${obj.position.horizontal}:${obj.position.depth}`;
+        if (!grouped.has(key)) {
+            grouped.set(key, { position: obj.position, names: [] });
+        }
+        grouped.get(key).names.push(obj.display_name.toLowerCase());
+    });
+
+    return Array.from(grouped.values()).map((group) => {
+        const formattedNames = group.names.map((name) => `${articleFor(name)} ${name}`);
+        const location = objectLocationPhrase(group.position);
+        return `${joinNaturalList(formattedNames)} ${location}`;
+    });
+}
+
+function buildSpatialSentence(objects, faceAnalyses, gestures) {
+    const personObjects = objects.filter((obj) => obj.label.toLowerCase() === "person");
+    const otherObjects = objects.filter((obj) => obj.label.toLowerCase() !== "person");
+    const sentences = [];
+
+    const personSentence = buildPersonDescription(personObjects, faceAnalyses, gestures);
+    if (personSentence) {
+        sentences.push(personSentence);
+    }
+
+    const objectGroups = buildObjectDescriptions(otherObjects.slice(0, 4));
+    objectGroups.forEach((groupText, index) => {
+        const prefix = sentences.length === 0 && index === 0 ? "There's" : "There's also";
+        sentences.push(`${prefix} ${groupText}`);
+    });
+
+    if (sentences.length === 0) {
+        return "Nothing detected around you.";
+    }
+
+    return `${sentences.join(". ")}.`;
 }
 
 function detectGestures() {
@@ -699,82 +977,41 @@ function detectGestures() {
     return gestures;
 }
 
-function sceneSignature(objects, faces, gestures) {
-    const objectPart = objects
+function sceneSignature(objects, faceAnalyses, gestures) {
+    const otherObjects = objects
+        .filter((obj) => obj.label.toLowerCase() !== "person")
         .map((obj) => `${obj.label}:${obj.position.horizontal}:${obj.position.depth}`)
         .sort()
         .join("|");
 
-    const facePart = faces
-        .map((face) => `${face.label}:${face.position.horizontal}:${face.position.depth}`)
+    const personObjects = objects.filter((obj) => obj.label.toLowerCase() === "person");
+    const peopleCount = countPeople(personObjects, faceAnalyses);
+    const position = getPrimaryPersonPosition(personObjects, faceAnalyses);
+    const personPart = peopleCount > 0 && position
+        ? `person:${peopleCount}:${position.horizontal}:${position.depth}`
+        : "";
+
+    const expressionPart = faceAnalyses
+        .flatMap((face) => face.expressions)
         .sort()
-        .join("|");
+        .join(",");
 
     const gesturePart = gestures
-        .map((gesture) => `${gesture.hand}:${gesture.gesture}:${gesture.horizontal}`)
+        .map((gesture) => gesture.gesture)
         .sort()
-        .join("|");
+        .join(",");
 
-    return `${objectPart}::${facePart}::${gesturePart}`;
+    return `${otherObjects}::${personPart}::${expressionPart}::${gesturePart}`;
 }
 
-function buildSpatialSentence(objects, faces, gestures) {
-    const parts = [];
-
-    if (objects.length === 0 && faces.length === 0 && gestures.length === 0) {
-        return "No detected objects, faces, or gestures.";
-    }
-
-    if (objects.length > 0) {
-        const objectParts = objects.slice(0, 4).map((obj) => {
-            const name = obj.display_name;
-            const where = horizontalLabel(obj.position.horizontal);
-            return `${name}, ${depthLabel(obj.position.depth)}, ${where}`;
-        });
-
-        if (objectParts.length === 1) {
-            parts.push(`Detected: ${objectParts[0]}`);
-        } else {
-            const last = objectParts.pop();
-            parts.push(`Detected: ${objectParts.join("; ")}, and ${last}`);
-        }
-    }
-
-    if (faces.length > 0) {
-        const faceParts = faces.slice(0, 3).map((face) => {
-            const where = horizontalLabel(face.position.horizontal);
-            return `Face, ${depthLabel(face.position.depth)}, ${where}`;
-        });
-
-        if (parts.length === 0) {
-            parts.push(`Detected: ${faceParts.join("; ")}`);
-        } else {
-            parts.push(`Also: ${faceParts.join("; ")}`);
-        }
-    }
-
-    if (gestures.length > 0) {
-        const gestureParts = gestures.map((gesture) => {
-            const where = horizontalLabel(gesture.horizontal);
-            return `${where} ${gesture.hand} showing ${gesture.gesture.replace(/_/g, " ")}`;
-        });
-
-        if (parts.length === 0) {
-            parts.push(gestureParts.join("; "));
-        } else {
-            parts.push(`Also: ${gestureParts.join("; ")}`);
-        }
-    }
-
-    return `${parts.join(". ")}.`;
-}
-
-function drawDetections(objects, faces, gestures) {
+function drawDetections(objects, faceAnalyses, gestures) {
     canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
     canvasCtx.lineWidth = 2;
     canvasCtx.font = "12px sans-serif";
 
-    const drawBox = (item) => {
+    const hasFaceAnalysis = faceAnalyses.length > 0;
+
+    const drawBox = (item, labelOverride) => {
         const x = item.bbox.x * canvasElement.width;
         const y = item.bbox.y * canvasElement.height;
         const w = item.bbox.width * canvasElement.width;
@@ -788,7 +1025,7 @@ function drawDetections(objects, faces, gestures) {
         canvasCtx.fillStyle = color + "30";
         canvasCtx.fillRect(x, y, w, h);
 
-        const tag = `${item.display_name} ${Math.round(item.confidence * 100)}%`;
+        const tag = labelOverride || `${item.display_name} ${Math.round(item.confidence * 100)}%`;
         const textWidth = canvasCtx.measureText(tag).width;
 
         canvasCtx.fillStyle = color;
@@ -797,8 +1034,16 @@ function drawDetections(objects, faces, gestures) {
         canvasCtx.fillText(tag, x + 4, Math.max(14, y - 6));
     };
 
-    objects.forEach(drawBox);
-    faces.forEach(drawBox);
+    objects
+        .filter((obj) => !(hasFaceAnalysis && obj.label.toLowerCase() === "person"))
+        .forEach((obj) => drawBox(obj));
+
+    faceAnalyses.forEach((face) => {
+        const expressionLabel = face.expressions.length > 0
+            ? capitalizeFirst(face.expressions[0])
+            : "Face";
+        drawBox(face, expressionLabel);
+    });
 
     if (gestures.length > 0) {
         gestures.forEach((gesture) => {
@@ -827,8 +1072,8 @@ function drawDetections(objects, faces, gestures) {
     }
 }
 
-async function announceScene(objects, faces, gestures, force = false) {
-    const signature = sceneSignature(objects, faces, gestures);
+async function announceScene(objects, faceAnalyses, gestures, force = false) {
+    const signature = sceneSignature(objects, faceAnalyses, gestures);
     const now = Date.now();
     const intervalMs = runtimeConfig.intervalSec * 1000;
 
@@ -848,31 +1093,34 @@ async function announceScene(objects, faces, gestures, force = false) {
     lastAnnounceAt = now;
     pendingAnnounce = true;
 
-    const sentence = buildSpatialSentence(objects, faces, gestures);
+    const sentence = buildSpatialSentence(objects, faceAnalyses, gestures);
 
     pendingAnnounce = false;
 
     setAnnouncement(sentence);
     speak(sentence);
 
-    if (objects.length === 0 && faces.length === 0 && gestures.length === 0) {
-        setStatus("Scanning. No objects detected.");
-    } else {
-        const objectCount = objects.length;
-        const faceCount = faces.length;
-        const gestureCount = gestures.length;
-        let status = `Scanning. ${objectCount} object${objectCount !== 1 ? "s" : ""}`;
+    const personObjects = objects.filter((obj) => obj.label.toLowerCase() === "person");
+    const otherCount = objects.length - personObjects.length;
+    const peopleCount = countPeople(personObjects, faceAnalyses);
+    const gestureCount = gestures.length;
 
-        if (faceCount > 0) {
-            status += `, ${faceCount} face${faceCount !== 1 ? "s" : ""}`;
-        }
-
-        if (gestureCount > 0) {
-            status += `, ${gestureCount} gesture${gestureCount !== 1 ? "s" : ""}`;
-        }
-
-        setStatus(`${status} detected.`);
+    if (peopleCount === 0 && otherCount === 0 && gestureCount === 0) {
+        setStatus("Scanning. Nothing detected.");
+        return;
     }
+
+    let status = "Scanning.";
+    if (peopleCount > 0) {
+        status += ` ${peopleCount} person${peopleCount !== 1 ? "s" : ""}`;
+    }
+    if (otherCount > 0) {
+        status += `${peopleCount > 0 ? "," : ""} ${otherCount} object${otherCount !== 1 ? "s" : ""}`;
+    }
+    if (gestureCount > 0) {
+        status += `, ${gestureCount} gesture${gestureCount !== 1 ? "s" : ""}`;
+    }
+    setStatus(`${status} detected.`);
 }
 
 function processFrame(forceAnnounce = false) {
@@ -882,10 +1130,10 @@ function processFrame(forceAnnounce = false) {
 
     const results = objectDetector.detectForVideo(video, performance.now());
     const objects = normalizeDetections(results.detections || []);
-    const faces = detectFaces();
+    const faceAnalyses = analyzeFaces();
 
     let gestures = lastGestures;
-    if (hasPerson(objects) || faces.length > 0) {
+    if (hasPerson(objects, faceAnalyses)) {
         gestureFrameCounter += 1;
         if (forceAnnounce || gestureFrameCounter % GESTURE_FRAME_SKIP === 0) {
             gestures = detectGestures();
@@ -897,9 +1145,9 @@ function processFrame(forceAnnounce = false) {
         lastGestures = [];
     }
 
-    updateGestureOverlay(gestures);
-    drawDetections(objects, faces, gestures);
-    announceScene(objects, faces, gestures, forceAnnounce);
+    updateGestureOverlay(gestures, faceAnalyses);
+    drawDetections(objects, faceAnalyses, gestures);
+    announceScene(objects, faceAnalyses, gestures, forceAnnounce);
 }
 
 function predictWebcam() {
@@ -932,7 +1180,7 @@ async function startApp() {
         setStatus("Camera active. Loading AI models...");
         const vision = await loadVisionTasks();
         objectDetector = await loadObjectDetector(vision);
-        faceDetector = await loadFaceDetector(vision);
+        faceLandmarker = await loadFaceLandmarker(vision);
         gestureRecognizer = await loadGestureRecognizer(vision);
         running = true;
         startBtn.hidden = true;

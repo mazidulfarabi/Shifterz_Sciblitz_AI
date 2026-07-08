@@ -18,17 +18,18 @@ The app helps users understand their surroundings through real-time audio feedba
 - Recognizes people, vehicles, furniture, animals, and household items
 - Each detection includes a label and confidence score
 
-### Face Detection
-- MediaPipe Face Detector locates faces in the video frame
-- Face bounding boxes are drawn in gold on the overlay
-- Face positions are included in spoken announcements
+### Face Detection & Expressions
+- MediaPipe Face Landmarker locates faces and reads facial expressions via blendshapes
+- Detects yawning, smiling, frowning, eyes closed, surprise, and more
+- Expressions are merged into the person description (never announced as a separate "face")
+- Expression labels appear on the video overlay
 
 ### Spatial Description
 - Describes horizontal position (left / center / right) and depth (very close / close / medium / far)
 - Helps users understand not only what is present, but where it is
 
 ### Hand Gesture Recognition
-- When a person or face is detected, MediaPipe Gesture Recognizer analyzes hand movements
+- When a person is detected, hand gestures and facial expressions are described together in one sentence
 - Supported gestures: Open Palm, Closed Fist, Thumb Up, Victory, Pointing Up, I Love You, and more
 - Detected gestures appear as text in the top-left corner of the video feed
 
