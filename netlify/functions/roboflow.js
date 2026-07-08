@@ -24,7 +24,7 @@ exports.handler = async function (event) {
   try {
     const body = JSON.parse(event.body || "{}");
     const imageBase64 = normalizeImageBase64(body.imageBase64 || body.image || "");
-    const mimeType = body.mimeType || "image/jpeg";
+    const modelId = process.env.ROBOFLOW_MODEL_ID || "american-sign-language-letters/6";
 
     if (!imageBase64) {
       return {
@@ -50,8 +50,8 @@ exports.handler = async function (event) {
     }
 
     const inferenceUrls = [
-      "https://serverless.roboflow.com/sign-language-words-wenlz/1",
-      "https://detect.roboflow.com/sign-language-words-wenlz/1"
+      `https://serverless.roboflow.com/${modelId}`,
+      `https://detect.roboflow.com/${modelId}`
     ];
 
     let lastError;

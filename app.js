@@ -6,13 +6,10 @@ const debugDiv = document.getElementById("debug-output");
 const startBtn = document.getElementById("start-btn");
 
 let running = false;
-let stream = null;
-let handLandmarker = null;
-let drawingUtils = null;
-let lastVideoTime = -1;
 let lastInferenceAt = 0;
-let inferenceInFlight = false;
-let lastPredictionLabel = "";
+let inferenceCanvasSize = { width: 320, height: 240 };
+let stream = null;
+let inferenceLoopId = null;
 
 function setStatus(message) {
   outputDiv.innerText = message;
@@ -31,78 +28,56 @@ function drawVideoFrame() {
   canvasCtx.drawImage(video, 0, 0, canvasElement.width, canvasElement.height);
 }
 
-function drawHandOverlay(result) {
-  if (!running || !result?.landmarks?.length || !drawingUtils) {
+function drawPredictions(predictions) {
+  if (!predictions?.length) {
     return;
   }
 
-  canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
-  canvasCtx.drawImage(video, 0, 0, canvasElement.width, canvasElement.height);
+  const scaleX = canvasElement.width / inferenceCanvasSize.width;
+  const scaleY = canvasElement.height / inferenceCanvasSize.height;
 
-  result.landmarks.forEach((landmarks) => {
-    drawingUtils.drawConnectors(landmarks, handLandmarker.HAND_CONNECTIONS, {
-      color: "#ef4444",
-      lineWidth: 3
-    });
-    drawingUtils.drawLandmarks(landmarks, {
-      color: "#ef4444",
-      lineWidth: 2
-    });
+  predictions.forEach((prediction) => {
+    const x = Number(prediction.x ?? prediction.center_x ?? 0);
+    const y = Number(prediction.y ?? prediction.center_y ?? 0);
+    const width = Number(prediction.width ?? prediction.w ?? 0);
+    const height = Number(prediction.height ?? prediction.h ?? 0);
+
+    if (!Number.isFinite(x) || !Number.isFinite(y) || !Number.isFinite(width) || !Number.isFinite(height)) {
+      return;
+    }
+
+    const left = (x - width / 2) * scaleX;
+    const top = (y - height / 2) * scaleY;
+    const boxWidth = width * scaleX;
+    const boxHeight = height * scaleY;
+
+    canvasCtx.strokeStyle = "#22c55e";
+    canvasCtx.lineWidth = 3;
+    canvasCtx.strokeRect(left, top, boxWidth, boxHeight);
+
+    canvasCtx.fillStyle = "#22c55e";
+    canvasCtx.font = "16px sans-serif";
+    canvasCtx.fillText(`${prediction.class_name || prediction.className || "Object"} ${(prediction.confidence * 100).toFixed(0)}%`, left, Math.max(top - 8, 10));
   });
-}
-
-function drawNoHandState() {
-  canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
-  canvasCtx.drawImage(video, 0, 0, canvasElement.width, canvasElement.height);
-  canvasCtx.fillStyle = "rgba(239, 68, 68, 0.95)";
-  canvasCtx.font = "bold 20px sans-serif";
-  canvasCtx.fillText("Hand not detected", 16, 32);
-}
-
-async function loadHandLandmarker() {
-  setStatus("Loading hand tracker...");
-
-  const vision = await import("https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.8/vision_bundle.mjs");
-  const { FilesetResolver, HandLandmarker, DrawingUtils } = vision;
-
-  const filesetResolver = await FilesetResolver.forVisionTasks(
-    "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.8/wasm"
-  );
-
-  handLandmarker = await HandLandmarker.createFromOptions(filesetResolver, {
-    baseOptions: {
-      modelAssetPath: "https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task",
-      delegate: "CPU"
-    },
-    runningMode: "VIDEO",
-    numHands: 1,
-    minHandDetectionConfidence: 0.5,
-    minHandPresenceConfidence: 0.5,
-    minTrackingConfidence: 0.5
-  });
-
-  drawingUtils = new DrawingUtils(canvasCtx);
-  setStatus("Hand tracker ready");
 }
 
 async function runInference() {
-  if (!running || video.readyState < 2 || inferenceInFlight) {
+  if (!running || video.readyState < 2) {
     return;
   }
 
   const now = Date.now();
-  if (now - lastInferenceAt < 1000) {
+  if (now - lastInferenceAt < 800) {
     return;
   }
-
   lastInferenceAt = now;
-  inferenceInFlight = true;
 
   const inferenceCanvas = document.createElement("canvas");
   const targetWidth = 320;
   const targetHeight = Math.round((video.videoHeight / video.videoWidth) * targetWidth || 240);
   inferenceCanvas.width = targetWidth;
   inferenceCanvas.height = targetHeight;
+  inferenceCanvasSize = { width: targetWidth, height: targetHeight };
 
   const inferenceCtx = inferenceCanvas.getContext("2d");
   inferenceCtx.drawImage(video, 0, 0, targetWidth, targetHeight);
@@ -110,9 +85,9 @@ async function runInference() {
   const dataUrl = inferenceCanvas.toDataURL("image/jpeg", 0.85);
   const imageBase64 = dataUrl.split(",")[1];
 
-  try {
-    setStatus("Analyzing sign...");
+  setStatus("Analyzing frame...");
 
+  try {
     const response = await fetch("/.netlify/functions/roboflow", {
       method: "POST",
       headers: {
@@ -145,68 +120,38 @@ async function runInference() {
         ? payload.result.predictions
         : [];
 
-    const parsedPredictions = predictions.filter((prediction) => prediction && typeof prediction === "object");
-    const topPrediction = parsedPredictions.length > 0
-      ? parsedPredictions.reduce((best, current) => {
-          const currentScore = Number(current.confidence || current.conf || current.score || 0);
-          const bestScore = Number(best.confidence || best.conf || best.score || 0);
-          return currentScore > bestScore ? current : best;
-        })
-      : null;
+    if (predictions.length > 0) {
+      const topPrediction = predictions.reduce((best, current) => {
+        const currentScore = Number(current.confidence || 0);
+        const bestScore = Number(best.confidence || 0);
+        return currentScore > bestScore ? current : best;
+      });
 
-    if (topPrediction) {
-      const label = topPrediction.class_name || topPrediction.className || topPrediction.class || topPrediction.label || topPrediction.name || topPrediction.predicted_class || topPrediction.top_class || "Detected sign";
-      const confidence = Number(topPrediction.confidence || topPrediction.conf || topPrediction.score || 0);
-      const confidencePercent = Math.round(confidence * 100);
-
-      if (confidence >= 0.6) {
-        setStatus(`${label} (${confidencePercent}%)`);
-        lastPredictionLabel = label;
-      } else {
-        setStatus("No clear sign detected");
-      }
+      const label = topPrediction.class_name || topPrediction.className || topPrediction.class || "Detected object";
+      const confidence = Math.round((topPrediction.confidence || 0) * 100);
+      setStatus(`${label} (${confidence}%)`);
     } else {
       const detail = payload.error || payload.message || "";
-      setStatus(detail ? `No clear sign detected — ${detail}` : "No clear sign detected");
+      setStatus(detail ? `No object detected — ${detail}` : "No object detected — move into frame");
     }
 
     drawVideoFrame();
+    drawPredictions(predictions);
   } catch (error) {
     console.error(error);
     setStatus(`Inference error: ${error.message}`);
-  } finally {
-    inferenceInFlight = false;
   }
 }
 
-function predictWebcam() {
-  if (!running) {
-    return;
-  }
-
-  if (!handLandmarker || video.readyState < 2) {
-    window.requestAnimationFrame(predictWebcam);
-    return;
-  }
-
-  if (video.currentTime !== lastVideoTime) {
-    lastVideoTime = video.currentTime;
-    const result = handLandmarker.detectForVideo(video, performance.now());
-
-    if (result.landmarks?.length) {
-      drawHandOverlay(result);
-      if (Date.now() - lastInferenceAt > 900) {
-        runInference();
-      }
-    } else {
-      drawNoHandState();
-      if (lastPredictionLabel) {
-        setStatus("No hand detected — position your hand in frame");
-      }
+function startRenderLoop() {
+  const tick = () => {
+    drawVideoFrame();
+    if (running) {
+      inferenceLoopId = window.requestAnimationFrame(tick);
     }
-  }
+  };
 
-  window.requestAnimationFrame(predictWebcam);
+  inferenceLoopId = window.requestAnimationFrame(tick);
 }
 
 async function startCamera() {
@@ -246,9 +191,10 @@ async function startApp() {
     await startCamera();
     running = true;
     startBtn.style.display = "none";
-    setStatus("Camera active — loading hand tracker...");
-    await loadHandLandmarker();
-    predictWebcam();
+    setStatus("Live stream active — detecting objects...");
+    startRenderLoop();
+    await runInference();
+    window.setInterval(runInference, 800);
   } catch (err) {
     console.error(err);
     startBtn.disabled = false;
