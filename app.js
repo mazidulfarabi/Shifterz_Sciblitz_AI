@@ -6,11 +6,13 @@ const debugDiv = document.getElementById("debug-output");
 const startBtn = document.getElementById("start-btn");
 
 let running = false;
-let lastInferenceAt = 0;
-let inferenceCanvasSize = { width: 320, height: 240 };
 let stream = null;
-let inferenceLoopId = null;
+let handLandmarker = null;
+let drawingUtils = null;
+let lastVideoTime = -1;
+let lastInferenceAt = 0;
 let inferenceInFlight = false;
+let lastPredictionLabel = "";
 
 function setStatus(message) {
   outputDiv.innerText = message;
@@ -29,30 +31,58 @@ function drawVideoFrame() {
   canvasCtx.drawImage(video, 0, 0, canvasElement.width, canvasElement.height);
 }
 
-function drawPredictions(predictions) {
-  if (!predictions?.length) {
+function drawHandOverlay(result) {
+  if (!running || !result?.landmarks?.length || !drawingUtils) {
     return;
   }
 
   canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
   canvasCtx.drawImage(video, 0, 0, canvasElement.width, canvasElement.height);
 
-  const topPrediction = predictions.reduce((best, current) => {
-    const currentScore = Number(current.confidence || current.conf || current.score || 0);
-    const bestScore = Number(best.confidence || best.conf || best.score || 0);
-    return currentScore > bestScore ? current : best;
-  }, {});
+  result.landmarks.forEach((landmarks) => {
+    drawingUtils.drawConnectors(landmarks, handLandmarker.HAND_CONNECTIONS, {
+      color: "#ef4444",
+      lineWidth: 3
+    });
+    drawingUtils.drawLandmarks(landmarks, {
+      color: "#ef4444",
+      lineWidth: 2
+    });
+  });
+}
 
-  const label = topPrediction.class_name || topPrediction.className || topPrediction.class || topPrediction.label || topPrediction.name || topPrediction.predicted_class || topPrediction.top_class || "Detected sign";
-  const confidence = Number(topPrediction.confidence || topPrediction.conf || topPrediction.score || 0);
+function drawNoHandState() {
+  canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
+  canvasCtx.drawImage(video, 0, 0, canvasElement.width, canvasElement.height);
+  canvasCtx.fillStyle = "rgba(239, 68, 68, 0.95)";
+  canvasCtx.font = "bold 20px sans-serif";
+  canvasCtx.fillText("Hand not detected", 16, 32);
+}
 
-  if (label && confidence >= 0.6) {
-    canvasCtx.fillStyle = "rgba(239, 68, 68, 0.95)";
-    canvasCtx.font = "bold 20px sans-serif";
-    canvasCtx.fillText(label, 16, 32);
-    canvasCtx.font = "16px sans-serif";
-    canvasCtx.fillText(`${Math.round(confidence * 100)}%`, 16, 56);
-  }
+async function loadHandLandmarker() {
+  setStatus("Loading hand tracker...");
+
+  const vision = await import("https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.8/vision_bundle.mjs");
+  const { FilesetResolver, HandLandmarker, DrawingUtils } = vision;
+
+  const filesetResolver = await FilesetResolver.forVisionTasks(
+    "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.8/wasm"
+  );
+
+  handLandmarker = await HandLandmarker.createFromOptions(filesetResolver, {
+    baseOptions: {
+      modelAssetPath: "https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task",
+      delegate: "CPU"
+    },
+    runningMode: "VIDEO",
+    numHands: 1,
+    minHandDetectionConfidence: 0.5,
+    minHandPresenceConfidence: 0.5,
+    minTrackingConfidence: 0.5
+  });
+
+  drawingUtils = new DrawingUtils(canvasCtx);
+  setStatus("Hand tracker ready");
 }
 
 async function runInference() {
@@ -61,9 +91,10 @@ async function runInference() {
   }
 
   const now = Date.now();
-  if (now - lastInferenceAt < 700) {
+  if (now - lastInferenceAt < 1000) {
     return;
   }
+
   lastInferenceAt = now;
   inferenceInFlight = true;
 
@@ -72,7 +103,6 @@ async function runInference() {
   const targetHeight = Math.round((video.videoHeight / video.videoWidth) * targetWidth || 240);
   inferenceCanvas.width = targetWidth;
   inferenceCanvas.height = targetHeight;
-  inferenceCanvasSize = { width: targetWidth, height: targetHeight };
 
   const inferenceCtx = inferenceCanvas.getContext("2d");
   inferenceCtx.drawImage(video, 0, 0, targetWidth, targetHeight);
@@ -80,11 +110,9 @@ async function runInference() {
   const dataUrl = inferenceCanvas.toDataURL("image/jpeg", 0.85);
   const imageBase64 = dataUrl.split(",")[1];
 
-  if (!inferenceInFlight) {
-    setStatus("Analyzing frame...");
-  }
-
   try {
+    setStatus("Analyzing sign...");
+
     const response = await fetch("/.netlify/functions/roboflow", {
       method: "POST",
       headers: {
@@ -128,15 +156,21 @@ async function runInference() {
 
     if (topPrediction) {
       const label = topPrediction.class_name || topPrediction.className || topPrediction.class || topPrediction.label || topPrediction.name || topPrediction.predicted_class || topPrediction.top_class || "Detected sign";
-      const confidence = Math.round((Number(topPrediction.confidence || topPrediction.conf || topPrediction.score || 0)) * 100);
-      setStatus(`${label} (${confidence}%)`);
+      const confidence = Number(topPrediction.confidence || topPrediction.conf || topPrediction.score || 0);
+      const confidencePercent = Math.round(confidence * 100);
+
+      if (confidence >= 0.6) {
+        setStatus(`${label} (${confidencePercent}%)`);
+        lastPredictionLabel = label;
+      } else {
+        setStatus("No clear sign detected");
+      }
     } else {
       const detail = payload.error || payload.message || "";
-      setStatus(detail ? `No object detected — ${detail}` : "No object detected — move into frame");
+      setStatus(detail ? `No clear sign detected — ${detail}` : "No clear sign detected");
     }
 
     drawVideoFrame();
-    drawPredictions(parsedPredictions);
   } catch (error) {
     console.error(error);
     setStatus(`Inference error: ${error.message}`);
@@ -145,15 +179,34 @@ async function runInference() {
   }
 }
 
-function startRenderLoop() {
-  const tick = () => {
-    drawVideoFrame();
-    if (running) {
-      inferenceLoopId = window.requestAnimationFrame(tick);
-    }
-  };
+function predictWebcam() {
+  if (!running) {
+    return;
+  }
 
-  inferenceLoopId = window.requestAnimationFrame(tick);
+  if (!handLandmarker || video.readyState < 2) {
+    window.requestAnimationFrame(predictWebcam);
+    return;
+  }
+
+  if (video.currentTime !== lastVideoTime) {
+    lastVideoTime = video.currentTime;
+    const result = handLandmarker.detectForVideo(video, performance.now());
+
+    if (result.landmarks?.length) {
+      drawHandOverlay(result);
+      if (Date.now() - lastInferenceAt > 900) {
+        runInference();
+      }
+    } else {
+      drawNoHandState();
+      if (lastPredictionLabel) {
+        setStatus("No hand detected — position your hand in frame");
+      }
+    }
+  }
+
+  window.requestAnimationFrame(predictWebcam);
 }
 
 async function startCamera() {
@@ -193,10 +246,9 @@ async function startApp() {
     await startCamera();
     running = true;
     startBtn.style.display = "none";
-    setStatus("Live stream active — detecting objects...");
-    startRenderLoop();
-    await runInference();
-    window.setInterval(runInference, 800);
+    setStatus("Camera active — loading hand tracker...");
+    await loadHandLandmarker();
+    predictWebcam();
   } catch (err) {
     console.error(err);
     startBtn.disabled = false;
