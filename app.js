@@ -34,39 +34,25 @@ function drawPredictions(predictions) {
     return;
   }
 
-  const scaleX = canvasElement.width / inferenceCanvasSize.width;
-  const scaleY = canvasElement.height / inferenceCanvasSize.height;
+  canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
+  canvasCtx.drawImage(video, 0, 0, canvasElement.width, canvasElement.height);
 
-  predictions.forEach((prediction) => {
-    const x = Number(prediction.x ?? prediction.center_x ?? 0);
-    const y = Number(prediction.y ?? prediction.center_y ?? 0);
-    const width = Number(prediction.width ?? prediction.w ?? 0);
-    const height = Number(prediction.height ?? prediction.h ?? 0);
+  const topPrediction = predictions.reduce((best, current) => {
+    const currentScore = Number(current.confidence || current.conf || current.score || 0);
+    const bestScore = Number(best.confidence || best.conf || best.score || 0);
+    return currentScore > bestScore ? current : best;
+  }, {});
 
-    if (!Number.isFinite(x) || !Number.isFinite(y) || !Number.isFinite(width) || !Number.isFinite(height)) {
-      return;
-    }
+  const label = topPrediction.class_name || topPrediction.className || topPrediction.class || topPrediction.label || topPrediction.name || topPrediction.predicted_class || topPrediction.top_class || "Detected sign";
+  const confidence = Number(topPrediction.confidence || topPrediction.conf || topPrediction.score || 0);
 
-    const left = (x - width / 2) * scaleX;
-    const top = (y - height / 2) * scaleY;
-    const boxWidth = width * scaleX;
-    const boxHeight = height * scaleY;
-
-    canvasCtx.strokeStyle = "#ef4444";
-    canvasCtx.lineWidth = 3;
-    canvasCtx.strokeRect(left, top, boxWidth, boxHeight);
-
-    canvasCtx.beginPath();
-    canvasCtx.moveTo(left + boxWidth * 0.2, top + boxHeight * 0.2);
-    canvasCtx.lineTo(left + boxWidth * 0.8, top + boxHeight * 0.8);
-    canvasCtx.strokeStyle = "#ef4444";
-    canvasCtx.lineWidth = 4;
-    canvasCtx.stroke();
-
-    canvasCtx.fillStyle = "#ef4444";
+  if (label && confidence >= 0.6) {
+    canvasCtx.fillStyle = "rgba(239, 68, 68, 0.95)";
+    canvasCtx.font = "bold 20px sans-serif";
+    canvasCtx.fillText(label, 16, 32);
     canvasCtx.font = "16px sans-serif";
-    canvasCtx.fillText(`${prediction.class_name || prediction.className || "Object"} ${(prediction.confidence * 100).toFixed(0)}%`, left, Math.max(top - 8, 10));
-  });
+    canvasCtx.fillText(`${Math.round(confidence * 100)}%`, 16, 56);
+  }
 }
 
 async function runInference() {
@@ -150,7 +136,7 @@ async function runInference() {
     }
 
     drawVideoFrame();
-    drawPredictions(predictions);
+    drawPredictions(parsedPredictions);
   } catch (error) {
     console.error(error);
     setStatus(`Inference error: ${error.message}`);
