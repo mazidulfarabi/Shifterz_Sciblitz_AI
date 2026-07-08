@@ -125,16 +125,17 @@ async function runInference() {
         : [];
 
     const parsedPredictions = predictions.filter((prediction) => prediction && typeof prediction === "object");
+    const topPrediction = parsedPredictions.length > 0
+      ? parsedPredictions.reduce((best, current) => {
+          const currentScore = Number(current.confidence || current.conf || current.score || 0);
+          const bestScore = Number(best.confidence || best.conf || best.score || 0);
+          return currentScore > bestScore ? current : best;
+        })
+      : null;
 
-    if (parsedPredictions.length > 0) {
-      const topPrediction = parsedPredictions.reduce((best, current) => {
-        const currentScore = Number(current.confidence || current.conf || 0);
-        const bestScore = Number(best.confidence || best.conf || 0);
-        return currentScore > bestScore ? current : best;
-      });
-
-      const label = topPrediction.class_name || topPrediction.className || topPrediction.class || topPrediction.label || topPrediction.name || "Detected object";
-      const confidence = Math.round((Number(topPrediction.confidence || topPrediction.conf || 0)) * 100);
+    if (topPrediction) {
+      const label = topPrediction.class_name || topPrediction.className || topPrediction.class || topPrediction.label || topPrediction.name || topPrediction.predicted_class || topPrediction.top_class || "Detected sign";
+      const confidence = Math.round((Number(topPrediction.confidence || topPrediction.conf || topPrediction.score || 0)) * 100);
       setStatus(`${label} (${confidence}%)`);
     } else {
       const detail = payload.error || payload.message || "";

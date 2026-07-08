@@ -50,8 +50,8 @@ exports.handler = async function (event) {
     }
 
     const inferenceUrls = [
-      "https://serverless.roboflow.com/asl-wzd6h/3",
-      "https://detect.roboflow.com/asl-wzd6h/3"
+      "https://serverless.roboflow.com/sign-language-words-wenlz/1",
+      "https://detect.roboflow.com/sign-language-words-wenlz/1"
     ];
 
     let lastError;
