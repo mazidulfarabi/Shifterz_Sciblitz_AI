@@ -1,5 +1,7 @@
 # Spatial Vision Assistant
 
+Watch Promo: https://youtu.be/m3WifFjN-28
+
 **Spatial Vision Assistant** is a browser-based assistive system that turns a live camera feed into spoken English descriptions of what is around the user — objects, people, facial expressions, and hand gestures — with spatial context (left, center, right; near or far).
 
 It is built for people who cannot rely on sight alone: those who are **blind**, **partially sighted**, living with **blurred vision**, **myopia** (nearsightedness), **hyperopia** (farsightedness), **macular degeneration**, **cataracts**, **glaucoma**, or other conditions that make navigating everyday spaces harder without audio support.
@@ -13,6 +15,8 @@ The goal is not to replace a cane, guide dog, or human assistant — but to give
 ---
 
 ## Why This Exists
+
+Globally, an estimated 43 million people are completely blind, and over 2.2 billion suffer from some form of visual impairment. The vast majority live in low-income regions where expensive assistive hardware like Meta smart glasses are entirely unaffordable, and limited access to specialized education leaves a significant portion unable to read Braille.
 
 For people who are fully blind, have blurred vision or are partially blind (Glaucoma, Retinitis Pigmentosa (RP), Leber Hereditary Optic Neuropathy (LHON), Choroideremia, Cataracts, Diabetic Retinopathy, Age-Related Macular Degeneration (AMD), Stargardt Disease) simple tasks carry friction that sighted users rarely think about:
 
